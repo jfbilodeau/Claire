@@ -70,6 +70,9 @@ public class Claire
 
         // Initialize OpenAI with starter prompt
         var starterPrompt = $"You are Claire, a Command-Line AI Runtime Environment who guides users with the {_configuration.Process} shell.\n";
+        starterPrompt += "You will respond to user prompts with the appropriate command, file, or explanation.\n";
+        // var starterPrompt = $"You will provide precise response to queries about {_configuration.Process} shell.\n";
+        // // starterPrompt += "If asked who you are, you will response that you are Claire, a Command-Line AI Runtime Environment who guides users with the {_configuration.Process} shell.\n";
         AddMessage(MessageType.User, starterPrompt);
 
         // Create backend console.
@@ -156,16 +159,18 @@ public class Claire
 
         var responseMessage = response.Value.Choices[0].Message.Content.ToLowerInvariant();
 
+        Console.WriteLine($"Response: {responseMessage}");
+
         return responseMessage;
     }
 
     private async Task<ChatResponse> GetIntentAsync(string prompt, ChatResponse intent)
     {
-        var intentPrompt = $"Determine if the following statement is asking for a command, file, or explanation:\n\n";
-        intentPrompt += $"{prompt}\n\n";
-        intentPrompt += $"Reply with the word `command`, `file`, `explain` or 'unknown.";
+        var intentPrompt = $"Determine if the following statement is asking about a shell command, a file, or explanation:\n\n";
+        intentPrompt += $"\"{prompt}\"\n\n";
+        intentPrompt += $"Reply only with the word `command`, `file`, `explain` or 'unknown.";
 
-        var intentText = await ExecuteChatPrompt(prompt);
+        var intentText = await ExecuteChatPrompt(intentPrompt);
 
         switch (intentText.ToLower())
         {
@@ -190,6 +195,15 @@ public class Claire
                 intent.Type = ChatResponseType.Unknown;
                 break;
         }
+
+        return intent;
+    }
+
+    private async Task<ChatResponse> GetUnknownAsync(string prompt, ChatResponse intent)
+    {
+        var response = await ExecuteChatPrompt(prompt);
+
+        intent.Response = response;
 
         return intent;
     }
@@ -249,6 +263,15 @@ public class Claire
         return intent;
     }
 
+    private async Task<ChatResponse> GetExplainedAsync(string prompt, ChatResponse intent)
+    {
+        var response = await ExecuteChatPrompt(prompt);
+
+        intent.Response = response;
+
+        return intent;
+    }
+
 
     private async Task<ChatResponse> GetPromptResult(string prompt)
     {
@@ -259,7 +282,8 @@ public class Claire
         switch (intent.Type)
         {
             case ChatResponseType.Unknown:
-                break; // Nothing else to do.
+                await GetUnknownAsync(prompt, intent);
+                break;
 
             case ChatResponseType.Command:
                 await GetCommandAsync(prompt, intent);
@@ -271,7 +295,7 @@ public class Claire
                 break;
 
             case ChatResponseType.Explain:
-                //     await GetExplainedAsync(prompt, intent);
+                await GetExplainedAsync(prompt, intent);
                 break;
 
             default:
