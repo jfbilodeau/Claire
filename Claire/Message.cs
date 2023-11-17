@@ -1,3 +1,5 @@
+namespace Claire;
+
 public enum MessageType
 {
     User = 1,

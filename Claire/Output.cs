@@ -1,7 +1,11 @@
+namespace Claire;
+
 using Azure.AI.OpenAI;
 
 public class Output
 {
+    public bool DebugOutput { get; set; } = false;
+    
     public string Prompt(string message)
     {
         WriteSystem(message);
@@ -25,6 +29,21 @@ public class Output
     public void WriteLine()
     {
         Console.WriteLine();
+    }
+
+    public void WriteDebug(string message, bool newLine = true)
+    {
+        if (DebugOutput)
+        {
+            Console.BackgroundColor = ConsoleColor.Black;
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.Write(message);
+
+            if (newLine)
+            {
+                WriteLine();
+            }
+        }
     }
 
     public void WriteSystem(string message, bool newLine = true)

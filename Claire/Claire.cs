@@ -1,12 +1,12 @@
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using Azure;
 using Azure.AI.OpenAI;
 
+namespace Claire;
 
 public class Claire
 {
-    class CommandDefinition
+    private class CommandDefinition
     {
         public CommandDefinition(string name, string description, Action function)
         {
@@ -15,9 +15,9 @@ public class Claire
             Function = function;
         }
 
-        public string Name;
-        public string Description;
-        public Action Function;
+        public readonly string Name;
+        public readonly string Description;
+        public readonly Action Function;
     }
 
     private readonly Output _output = new();
@@ -42,22 +42,6 @@ public class Claire
     {
         _configuration = configuration;
 
-        // Validate configuration
-        if (string.IsNullOrWhiteSpace(_configuration.OpenAiUrl))
-        {
-            throw new Exception("OpenAiUrl is required");
-        }
-
-        if (string.IsNullOrWhiteSpace(_configuration.OpenAiKey))
-        {
-            throw new Exception("OpenAiKey is required");
-        }
-
-        if (string.IsNullOrWhiteSpace(_configuration.OpenAiModel))
-        {
-            throw new Exception("OpenAIModel is required");
-        }
-
         // Initialize commands
         _commands.Add(new CommandDefinition("help", "Display a list of commands", CommandHelp));
         _commands.Add(new CommandDefinition("exit", "Exit Claire", CommandExit));
@@ -69,16 +53,14 @@ public class Claire
         );
 
         // Initialize OpenAI with starter prompt
-        var starterPrompt = $"You are Claire, a Command-Line AI Runtime Environment who guides users with the {_configuration.Process} shell.\n";
+        var starterPrompt = $"You are Claire, a Command-Line AI Runtime Environment who guides users with the {_configuration.ShellProcessName} shell.\n";
         starterPrompt += "You will respond to user prompts with the appropriate command, file, or explanation.\n";
-        // var starterPrompt = $"You will provide precise response to queries about {_configuration.Process} shell.\n";
-        // // starterPrompt += "If asked who you are, you will response that you are Claire, a Command-Line AI Runtime Environment who guides users with the {_configuration.Process} shell.\n";
         AddMessage(MessageType.User, starterPrompt);
 
         // Create backend console.
         var processStartInfo = new ProcessStartInfo
         {
-            FileName = _configuration.Process,
+            FileName = _configuration.ShellProcessName,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -164,7 +146,7 @@ public class Claire
         return responseMessage;
     }
 
-    private async Task<ChatResponse> GetIntentAsync(string prompt, ChatResponse intent)
+    public async Task<ChatResponse> GetIntentAsync(string prompt, ChatResponse intent)
     {
         var intentPrompt = $"Determine if the following statement is asking about a shell command, a file, or explanation:\n\n";
         intentPrompt += $"\"{prompt}\"\n\n";

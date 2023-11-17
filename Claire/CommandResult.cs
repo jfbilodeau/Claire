@@ -1,3 +1,5 @@
+namespace Claire;
+
 public class CommandResult 
 {
     public string Output { get; set; } = "";

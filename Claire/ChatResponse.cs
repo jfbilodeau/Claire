@@ -1,3 +1,5 @@
+namespace Claire;
+
 public enum ChatResponseType
 {
     Unknown = 1,
