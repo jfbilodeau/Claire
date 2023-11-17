@@ -1,0 +1,14 @@
+{
+    // Your OpenAI API URL
+    "openAiUrl": "",
+    // Your OpenAI API key
+    "openAiKey": "",
+    // Your OpenAI model name
+    "openAiModel": "",
+    // Name of the process to execute
+    // If blank, defaults to:
+    //  - Windows: "cmd.exe"
+    //  - Linux: "bash"
+    "process": "",
+    "debug": false
+}
