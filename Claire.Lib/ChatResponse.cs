@@ -11,7 +11,7 @@ public enum ChatResponseType
 public class ChatResponse
 {
     public ChatResponseType Type { get; set; }
-    public string? Response { get; set; }
-    public string? FileName { get; set; }
+    public string Response { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
 
 }

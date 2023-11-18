@@ -1,13 +1,11 @@
-﻿using System.Runtime.InteropServices;
-using Claire;
-using Microsoft.Extensions.Configuration;
+﻿using Claire;
 
-Console.WriteLine("Starting Clair...");
+Console.WriteLine("Starting Claire...");
 
 // Create Claire
 
 var claire = new ClaireBuilder()
-    .WithDefaultConfiguration()
+    .WithDefaultConfiguration(typeof(Program).Assembly)
     .Build();
 
 await claire.Run();

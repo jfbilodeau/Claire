@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices.JavaScript;
+using System.Text;
 using Azure;
 using Azure.AI.OpenAI;
 
@@ -61,17 +63,17 @@ public class Claire
         var processStartInfo = new ProcessStartInfo
         {
             FileName = _configuration.ShellProcessName,
+            UseShellExecute = false,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            CreateNoWindow = !_configuration.Debug,
+            // CreateNoWindow = !_configuration.Debug,
+            CreateNoWindow = false,
+            WorkingDirectory = Directory.GetCurrentDirectory(),
         };
-        _process = Process.Start(processStartInfo);
+        var process = Process.Start(processStartInfo);
 
-        if (_process == null)
-        {
-            throw new Exception("Failed to start backend console");
-        }
+        _process = process ?? throw new Exception("Failed to start backend console");
 
         _processWriter = _process.StandardInput;
         _processReader = _process.StandardOutput;
@@ -139,7 +141,7 @@ public class Claire
 
         var response = await _openAiClient.GetChatCompletionsAsync(options);
 
-        var responseMessage = response.Value.Choices[0].Message.Content.ToLowerInvariant();
+        var responseMessage = response.Value.Choices[0].Message.Content;
 
         Console.WriteLine($"Response: {responseMessage}");
 
@@ -211,7 +213,7 @@ public class Claire
 
         var fileName = await ExecuteChatPrompt(fileNamePrompt);
 
-        if (fileName.ToLower().Contains("Unknown"))
+        if (fileName.Contains("<<unknown>>"))
         {
             fileName = "";
         }
@@ -228,19 +230,8 @@ public class Claire
         filePrompt += $"Respond only the content of the file. Do not include explanations or markdown.";
 
         var responseText = await ExecuteChatPrompt(filePrompt);
-
-        var lines = responseText.Split("\n");
-
-        if (lines.Length < 2)
-        {
-            intent.Type = ChatResponseType.Unknown;
-            intent.Response = responseText;
-
-            return intent;
-        }
-
-        intent.Response = lines[0];
-        intent.FileName = String.Join("\n", lines.Skip(1));
+        
+        intent.Response = responseText;
 
         return intent;
     }
@@ -286,30 +277,64 @@ public class Claire
 
         return intent;
     }
+    
+    private async Task<string> ReadStream(StreamReader reader)
+    {
+        var builder = new StringBuilder();
+        var buffer = new char[4096];
+        int byteRead;
+
+        var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+        try
+        {
+            while ((byteRead = await reader.ReadAsync(buffer, cancellationTokenSource.Token)) > 0)
+            {
+                builder.Append(buffer, 0, byteRead);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // reader.ReadAsync will throw a TaskCanceledException when the timeout is reached.
+        }
+
+        return builder.ToString();
+    }
 
     private async Task<CommandResult> ExecuteCommand(string command)
     {
-        _processWriter.Write($"{command}\n");
+        try
+        {
+            await _processWriter.WriteAsync($"{command}{_processWriter.NewLine}");
+            await _processWriter.FlushAsync();
 
-        await Task.Delay(TimeSpan.FromSeconds(1));
+            var readDelay = TimeSpan.FromSeconds(1);
+            
+            await Task.Delay(readDelay);
 
-        var result = new CommandResult();
+            var result = new CommandResult
+            {
+                Output = await ReadStream(_processReader),
+                Error = await ReadStream(_processErrorReader),
+            };
 
-        result.Output = _processReader.ReadToEnd();
-        result.Error = _processErrorReader.ReadToEnd();
-
-        return result;
+            return result;
+        }
+        catch (Exception exception)
+        {   
+            Console.WriteLine($"Exception: {exception.Message}");
+            throw;
+        }
     }
 
     private async Task ExecuteIntentUnknown(ChatResponse intent)
     {
-        _output.WriteSystem($"Sorry, I don't understand what you mean. Please try again.");
+        _output.WriteSystem("Sorry, I don't understand what you mean. Please try again.");
     }
 
     private async Task<string> GetErrorDescription(string command, string error)
     {
         var prompt = $"Explain why the command `{command}` encountered the following error:\n";
-        prompt += $"{error}";
+        prompt += $"{error}\n";
 
         var response = await ExecuteChatPrompt(prompt);
 
@@ -364,10 +389,20 @@ public class Claire
                     _output.WriteSystem("No file name provide. File will not be saved.");
                     return;
                 }
+                
+                action.FileName = fileName;
             }
 
-            // TODO: Need to save through working directory of the command line...
-            File.WriteAllText(action.FileName, action.Response);
+            try
+            {
+                // TODO: Need to save through working directory of the command line...
+                await File.WriteAllTextAsync(action.FileName, action.Response);
+                _output.WriteSystem($"File {action.FileName} saved.");
+            }
+            catch (Exception exception)
+            {
+                _output.WriteCommandError($"Could not save file {action.FileName}: {exception.Message}");
+            }
         }
     }
 
@@ -437,11 +472,11 @@ public class Claire
             {
                 var intent = await GetPromptResult(prompt);
 
-                Console.WriteLine($"Intent: {intent.Type}");
-                Console.WriteLine($"Command: {intent.Response}");
-                Console.WriteLine($"File: {intent.FileName}");
+                _output.WriteDebug($"Intent: {intent.Type}");
+                _output.WriteDebug($"Command: {intent.Response}");
+                _output.WriteDebug($"File: {intent.FileName}");
 
-                ExecuteIntent(intent);
+                await ExecuteIntent(intent);
             }
         }
     }

@@ -1,3 +1,4 @@
+// Claire default configuration file
 {
     // Your OpenAI API URL
     "openAiUrl": "",
