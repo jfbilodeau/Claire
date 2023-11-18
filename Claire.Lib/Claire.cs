@@ -148,7 +148,7 @@ public class Claire
         return responseMessage;
     }
 
-    public async Task<ChatResponse> GetIntentAsync(string prompt, ChatResponse intent)
+    private async Task<ChatResponse> GetIntentAsync(string prompt, ChatResponse intent)
     {
         var intentPrompt = $"Determine if the following statement is asking about a shell command, a file, or explanation:\n\n";
         intentPrompt += $"\"{prompt}\"\n\n";
@@ -246,7 +246,7 @@ public class Claire
     }
 
 
-    private async Task<ChatResponse> GetPromptResult(string prompt)
+    public async Task<ChatResponse> GetPromptResult(string prompt)
     {
         var intent = new ChatResponse();
 
