@@ -1,15 +1,15 @@
 ﻿using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Text;
 
 namespace Claire;
 
 // Wrapper for a shell process
 public class ClaireShell
 {
-    private readonly string ClaireShellPrompt = "ClaireShell";
-    
+    private readonly string ClaireShellPrompt = "ClaireShellPromptMarker";
+
     private readonly string _shellProcessName;
+    private readonly string _commandPrefix = string.Empty;
+    private readonly string _commandSuffix = string.Empty;
     private readonly Process _process;
     private readonly StreamWriter _processWriter;
     private readonly StreamReader _processReader;
@@ -21,15 +21,23 @@ public class ClaireShell
     {
         _shellProcessName = shellProcessName;
 
+        var arguments = string.Empty;
+
+        if (_shellProcessName.Contains("bash"))
+        {
+            // Bash does not echo the shell prompt to stdout so need output it manually
+            _commandSuffix = $" ; echo {ClaireShellPrompt}";
+        }
+
         var processStartInfo = new ProcessStartInfo
         {
             FileName = shellProcessName,
+            Arguments = arguments,
             UseShellExecute = false,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            // CreateNoWindow = !_configuration.Debug,
-            CreateNoWindow = false,
+            CreateNoWindow = true,
             WorkingDirectory = Directory.GetCurrentDirectory(),
         };
         var process = Process.Start(processStartInfo);
@@ -44,7 +52,8 @@ public class ClaireShell
         // This is used to detect when a command has finished executing.
         if (shellProcessName.Contains("bash"))
         {
-            Execute($"export PS1=\"{ClaireShellPrompt}\\n$PS1\"").Wait();
+            // Execute($"export PS1=\"{ClaireShellPrompt}\\n$PS1\"").Wait();
+            // Using _commandSuffix instead to output the `ClairShellPrompt` to stdout
         }
         else if (shellProcessName.Contains("cmd", StringComparison.InvariantCultureIgnoreCase))
         {
@@ -52,7 +61,9 @@ public class ClaireShell
         }
         else if (shellProcessName.Contains("powershell", StringComparison.InvariantCultureIgnoreCase))
         {
-            Execute($"function prompt {{ \"{ClaireShellPrompt}`n$($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) \" }}").Wait();
+            Execute(
+                    $"function prompt {{ \"{ClaireShellPrompt}`n$($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) \" }}")
+                .Wait();
         }
         else
         {
@@ -60,10 +71,10 @@ public class ClaireShell
         }
     }
 
-    private async Task<string> ReadStandardOut(StreamReader reader)
+    private async Task<string> ReadUntilPrompt(StreamReader reader)
     {
-        var EndStreamToken = $"{_processWriter.NewLine}{ClaireShellPrompt}{_processWriter.NewLine}";
-        
+        var EndStreamToken = $"{ClaireShellPrompt}{_processWriter.NewLine}";
+
         var response = string.Empty;
         var buffer = new char[4096];
         int byteRead;
@@ -77,14 +88,14 @@ public class ClaireShell
                 break;
             }
         }
-        
+
         // Remove the delimiter from the end of the response
         response = response.Replace(EndStreamToken, string.Empty);
 
         return response;
     }
-    
-    private async Task<string> ReadStandardError(StreamReader reader)
+
+    private async Task<string> ReadUntilEnd(StreamReader reader)
     {
         var response = string.Empty;
         var buffer = new char[4096];
@@ -116,14 +127,12 @@ public class ClaireShell
         executingCommand = true;
 
         // Write command to shell
-        await _processWriter.WriteAsync($"{command}{_processWriter.NewLine}");
-        await _processWriter.FlushAsync();
+        await _processWriter.WriteAsync($"{_commandPrefix}{command}{_commandSuffix}{_processWriter.NewLine}");
 
-        // Read output from shell
-        var result = new ShellResult
+        var result = new ShellResult()
         {
-            Output = await ReadStandardOut(_processReader),
-            Error = await ReadStandardError(_processErrorReader),
+            Output = await ReadUntilPrompt(_processReader),
+            Error = await ReadUntilEnd(_processErrorReader),
         };
         
         executingCommand = false;

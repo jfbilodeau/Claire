@@ -343,7 +343,13 @@ public class Claire
     {
         try
         {
+            _userInterface.WriteDebug($"command: {command}");
+            
             var result = await _shell.Execute(command);
+            
+            _userInterface.WriteDebug($"stdout: {result.Output}");
+            _userInterface.WriteDebug($"stderr: {result.Error}");
+            
             // await _processWriter.WriteAsync($"{command}{_processWriter.NewLine}");
             // await _processWriter.FlushAsync();
             //
