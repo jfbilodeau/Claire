@@ -53,12 +53,7 @@ public class Claire
             new Uri(_configuration.OpenAiUrl),
             new AzureKeyCredential(_configuration.OpenAiKey)
         );
-
-        // Initialize OpenAI with starter prompt
-        var starterPrompt = $"You are Claire, a Command-Line AI Runtime Environment who guides users with the {_configuration.ShellProcessName} shell.\n";
-        starterPrompt += "You will respond to user prompts with the appropriate command, file, or explanation.\n";
-        AddMessage(MessageType.User, starterPrompt);
-
+        
         // Create backend console.
         var processStartInfo = new ProcessStartInfo
         {
@@ -102,6 +97,23 @@ public class Claire
         return messages;
     }
 
+    private List<ChatMessage> PrepareChatMessages(string prompt)
+    {
+        var messages = GetConversationHistory(10);
+        
+        // Always initialize conversation with starter prompt
+        var starterPrompt = $"You are Claire, a Command-Line AI Runtime Environment who guides users with the {_configuration.ShellProcessName} shell.\n";
+        starterPrompt += "You will provide command, scripts, configuration files and explanation to the user\n";
+        starterPrompt += "You will also provide help with using the Azure CLI.\n";
+        var starterMessage = new ChatMessage("system", starterPrompt);
+        
+        messages.Insert(0, starterMessage);
+        
+        messages.Add(new ChatMessage(ConvertMessageTypeToRole(MessageType.User), prompt));
+
+        return messages;
+    }
+
     private string GetUserPrompt()
     {
         string? prompt;
@@ -131,11 +143,9 @@ public class Claire
         };
     }
 
-    private async Task<string> ExecuteChatPrompt(string prompt)
+    private async Task<string> ExecuteChatPrompt(string prompt, bool saveHistory = false)
     {
-        var messages = GetConversationHistory(10);
-
-        messages.Add(new ChatMessage(ConvertMessageTypeToRole(MessageType.User), prompt));
+        var messages = PrepareChatMessages(prompt);
 
         var options = new ChatCompletionsOptions(_configuration.OpenAiModel, messages);
 
@@ -143,14 +153,18 @@ public class Claire
 
         var responseMessage = response.Value.Choices[0].Message.Content;
 
-        Console.WriteLine($"Response: {responseMessage}");
+        if (saveHistory)
+        {
+            _messages.Add(new Message() { Type = MessageType.User, Text = prompt });
+            _messages.Add(new Message() { Type = MessageType.Claire, Text = responseMessage });
+        }
 
         return responseMessage;
     }
 
     private async Task<ChatResponse> GetIntentAsync(string prompt, ChatResponse intent)
     {
-        var intentPrompt = $"Determine if the following statement is asking about a shell command, a file, or explanation:\n\n";
+        var intentPrompt = $"Determine if the following statement is asking about a specific command, generate a file, or an explanation:\n\n";
         intentPrompt += $"\"{prompt}\"\n\n";
         intentPrompt += $"Reply only with the word `command`, `file`, `explain` or 'unknown.";
 
@@ -185,7 +199,7 @@ public class Claire
 
     private async Task<ChatResponse> GetUnknownAsync(string prompt, ChatResponse intent)
     {
-        var response = await ExecuteChatPrompt(prompt);
+        var response = await ExecuteChatPrompt(prompt, saveHistory: true);
 
         intent.Response = response;
 
@@ -198,7 +212,7 @@ public class Claire
         commandPrompt += $"{prompt}\n\n";
         commandPrompt += $"Reply with only the text for the command. Do not include explanation or markdown.";
 
-        var commandText = await ExecuteChatPrompt(commandPrompt);
+        var commandText = await ExecuteChatPrompt(commandPrompt, saveHistory: true);
 
         intent.Response = commandText;
 
@@ -229,16 +243,16 @@ public class Claire
         filePrompt += $"{prompt}\n\n";
         filePrompt += $"Respond only the content of the file. Do not include explanations or markdown.";
 
-        var responseText = await ExecuteChatPrompt(filePrompt);
+        var responseText = await ExecuteChatPrompt(filePrompt, saveHistory: true);
         
         intent.Response = responseText;
 
         return intent;
     }
 
-    private async Task<ChatResponse> GetExplainedAsync(string prompt, ChatResponse intent)
+    private async Task<ChatResponse> GetExplanationAsync(string prompt, ChatResponse intent)
     {
-        var response = await ExecuteChatPrompt(prompt);
+        var response = await ExecuteChatPrompt(prompt, saveHistory: true);
 
         intent.Response = response;
 
@@ -268,12 +282,19 @@ public class Claire
                 break;
 
             case ChatResponseType.Explain:
-                await GetExplainedAsync(prompt, intent);
+                await GetExplanationAsync(prompt, intent);
                 break;
 
             default:
                 throw new Exception("Internal error: Unknown intent type");
         }
+        
+        _messages.Add(new Message()
+        {
+            Type = MessageType.User,
+            Text = intent.Response,
+            FileName = intent.FileName,
+        });
 
         return intent;
     }
@@ -336,7 +357,7 @@ public class Claire
         var prompt = $"Explain why the command `{command}` encountered the following error:\n";
         prompt += $"{error}\n";
 
-        var response = await ExecuteChatPrompt(prompt);
+        var response = await ExecuteChatPrompt(prompt, saveHistory: true);
 
         return response;
     }
@@ -472,10 +493,10 @@ public class Claire
             {
                 var intent = await GetPromptResult(prompt);
 
-                _output.WriteDebug($"Intent: {intent.Type}");
-                _output.WriteDebug($"Command: {intent.Response}");
-                _output.WriteDebug($"File: {intent.FileName}");
-
+                // _output.WriteDebug($"Intent: {intent.Type}");
+                // _output.WriteDebug($"Command: {intent.Response}");
+                // _output.WriteDebug($"File: {intent.FileName}");
+                
                 await ExecuteIntent(intent);
             }
         }

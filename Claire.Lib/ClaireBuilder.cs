@@ -22,7 +22,7 @@ public class ClaireBuilder
         // Build configuration
         _configuration = new ConfigurationBuilder()
             .SetBasePath(Directory.GetCurrentDirectory())
-            .AddJsonFile("claire.json", optional: true)
+            .AddJsonFile("Claire.json", optional: true)
             .AddEnvironmentVariables()
             .AddUserSecrets(assembly)
             .Build();
