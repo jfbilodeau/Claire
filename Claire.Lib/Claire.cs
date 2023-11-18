@@ -1,5 +1,3 @@
-using System.Diagnostics;
-using System.Runtime.InteropServices.JavaScript;
 using System.Text;
 using Azure;
 using Azure.AI.OpenAI;
@@ -28,10 +26,11 @@ public class Claire
 
     private readonly ClaireConfiguration _configuration;
     private readonly OpenAIClient _openAiClient;
-    private readonly Process _process;
-    private readonly StreamWriter _processWriter;
-    private readonly StreamReader _processReader;
-    private readonly StreamReader _processErrorReader;
+    private readonly ClaireShell _shell;
+    // private readonly Process _process;
+    // private readonly StreamWriter _processWriter;
+    // private readonly StreamReader _processReader;
+    // private readonly StreamReader _processErrorReader;
 
     private readonly IList<Message> _messages = new List<Message>();
 
@@ -57,25 +56,28 @@ public class Claire
             new AzureKeyCredential(_configuration.OpenAiKey)
         );
         
+        // Create shell
+        _shell = new ClaireShell(_configuration.ShellProcessName);
+        
         // Create backend console.
-        var processStartInfo = new ProcessStartInfo
-        {
-            FileName = _configuration.ShellProcessName,
-            UseShellExecute = false,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            // CreateNoWindow = !_configuration.Debug,
-            CreateNoWindow = false,
-            WorkingDirectory = Directory.GetCurrentDirectory(),
-        };
-        var process = Process.Start(processStartInfo);
-
-        _process = process ?? throw new Exception("Failed to start backend console");
-
-        _processWriter = _process.StandardInput;
-        _processReader = _process.StandardOutput;
-        _processErrorReader = _process.StandardError;
+        // var processStartInfo = new ProcessStartInfo
+        // {
+        //     FileName = _configuration.ShellProcessName,
+        //     UseShellExecute = false,
+        //     RedirectStandardInput = true,
+        //     RedirectStandardOutput = true,
+        //     RedirectStandardError = true,
+        //     // CreateNoWindow = !_configuration.Debug,
+        //     CreateNoWindow = false,
+        //     WorkingDirectory = Directory.GetCurrentDirectory(),
+        // };
+        // var process = Process.Start(processStartInfo);
+        //
+        // _process = process ?? throw new Exception("Failed to start backend console");
+        //
+        // _processWriter = _process.StandardInput;
+        // _processReader = _process.StandardOutput;
+        // _processErrorReader = _process.StandardError;
     }
 
     private void AddMessage(MessageType messageType, string text)
@@ -315,44 +317,45 @@ public class Claire
         return intent;
     }
     
-    private async Task<string> ReadStream(StreamReader reader)
-    {
-        var builder = new StringBuilder();
-        var buffer = new char[4096];
-        int byteRead;
+    // private async Task<string> ReadStream(StreamReader reader)
+    // {
+    //     var builder = new StringBuilder();
+    //     var buffer = new char[4096];
+    //     int byteRead;
+    //
+    //     var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+    //     try
+    //     {
+    //         while ((byteRead = await reader.ReadAsync(buffer, cancellationTokenSource.Token)) > 0)
+    //         {
+    //             builder.Append(buffer, 0, byteRead);
+    //         }
+    //     }
+    //     catch (OperationCanceledException)
+    //     {
+    //         // reader.ReadAsync will throw a TaskCanceledException when the timeout is reached.
+    //     }
+    //
+    //     return builder.ToString();
+    // }
 
-        var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+    private async Task<ShellResult> ExecuteCommand(string command)
+    {
         try
         {
-            while ((byteRead = await reader.ReadAsync(buffer, cancellationTokenSource.Token)) > 0)
-            {
-                builder.Append(buffer, 0, byteRead);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // reader.ReadAsync will throw a TaskCanceledException when the timeout is reached.
-        }
-
-        return builder.ToString();
-    }
-
-    private async Task<CommandResult> ExecuteCommand(string command)
-    {
-        try
-        {
-            await _processWriter.WriteAsync($"{command}{_processWriter.NewLine}");
-            await _processWriter.FlushAsync();
-
-            var readDelay = TimeSpan.FromSeconds(1);
-            
-            await Task.Delay(readDelay);
-
-            var result = new CommandResult
-            {
-                Output = await ReadStream(_processReader),
-                Error = await ReadStream(_processErrorReader),
-            };
+            var result = await _shell.Execute(command);
+            // await _processWriter.WriteAsync($"{command}{_processWriter.NewLine}");
+            // await _processWriter.FlushAsync();
+            //
+            // var readDelay = TimeSpan.FromSeconds(1);
+            //
+            // await Task.Delay(readDelay);
+            //
+            // var result = new ShellResult
+            // {
+            //     Output = await ReadStream(_processReader),
+            //     Error = await ReadStream(_processErrorReader),
+            // };
 
             return result;
         }
