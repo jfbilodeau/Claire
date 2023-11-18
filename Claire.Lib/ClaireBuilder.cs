@@ -72,6 +72,11 @@ public class ClaireBuilder
             throw new Exception("OpenAIModel is required");
         }
 
+        if (claireConfiguration.ChatHistorySize < 0)
+        {
+            throw new Exception("ChatHistorySize must be greater than or equal to 0");
+        }
+
         if (string.IsNullOrWhiteSpace(claireConfiguration.ShellProcessName))
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))

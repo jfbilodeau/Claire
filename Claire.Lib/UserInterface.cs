@@ -2,7 +2,7 @@ namespace Claire;
 
 using Azure.AI.OpenAI;
 
-public class Output
+public class UserInterface
 {
     public bool DebugOutput { get; set; } = false;
     
@@ -17,13 +17,11 @@ public class Output
 
     public bool PromptConfirm(string message)
     {
-        WriteSystem($"{message} Y/N: ");
+        WriteSystem($"{message} Y/N: ", newLine: false);
 
-        var key = Console.ReadKey();
+        var key = Console.ReadLine();
 
-        WriteLine();
-
-        return key.KeyChar == 'Y' || key.KeyChar == 'y';
+        return key is { Length: > 0 } && (key[0] == 'Y' || key[0] == 'y');
     }
 
     public void WriteLine()

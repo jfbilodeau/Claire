@@ -22,7 +22,7 @@ public class Claire
         public readonly Action Function;
     }
 
-    private readonly Output _output = new();
+    private readonly UserInterface _userInterface = new();
 
     private readonly List<CommandDefinition> _commands = new();
 
@@ -38,14 +38,17 @@ public class Claire
     private bool _active = false;
 
     public ClaireConfiguration Configuration => _configuration;
-    public Output Output => _output;
+    public UserInterface UserInterface => _userInterface;
 
     public Claire(ClaireConfiguration configuration)
     {
         _configuration = configuration;
 
+        _userInterface.DebugOutput = _configuration.Debug;
+        
         // Initialize commands
         _commands.Add(new CommandDefinition("help", "Display a list of commands", CommandHelp));
+        _commands.Add(new CommandDefinition("debug", "Enable/disable debug output", CommandDebug));
         _commands.Add(new CommandDefinition("exit", "Exit Claire", CommandExit));
 
         // Create OpenAI client
@@ -91,7 +94,7 @@ public class Claire
         var messages = _messages
             .Where(m => m.Type == MessageType.Claire || m.Type == MessageType.User)
             .Select(m => new ChatMessage(ConvertMessageTypeToRole(m.Type), m.Text))
-            .TakeLast(10)
+            .TakeLast(_configuration.ChatHistorySize)
             .ToList();
 
         return messages;
@@ -120,13 +123,13 @@ public class Claire
 
         do
         {
-            _output.WriteSystem("Please tell me what you would like to do?");
+            _userInterface.WriteSystem("Please tell me what you would like to do?");
 
             prompt = Console.ReadLine();
 
             if (string.IsNullOrWhiteSpace(prompt))
             {
-                _output.WriteSystem("Use `/help` to see a list of commands.");
+                _userInterface.WriteSystem("Use `/help` to see a list of commands.");
             }
         } while (string.IsNullOrWhiteSpace(prompt));
 
@@ -148,10 +151,14 @@ public class Claire
         var messages = PrepareChatMessages(prompt);
 
         var options = new ChatCompletionsOptions(_configuration.OpenAiModel, messages);
+        
+        _userInterface.WriteDebug($"prompt: {prompt}");
 
         var response = await _openAiClient.GetChatCompletionsAsync(options);
 
         var responseMessage = response.Value.Choices[0].Message.Content;
+        
+        _userInterface.WriteDebug($"response: {responseMessage}");
 
         if (saveHistory)
         {
@@ -349,7 +356,7 @@ public class Claire
 
     private async Task ExecuteIntentUnknown(ChatResponse intent)
     {
-        _output.WriteSystem("Sorry, I don't understand what you mean. Please try again.");
+        _userInterface.WriteSystem("Sorry, I don't understand what you mean. Please try again.");
     }
 
     private async Task<string> GetErrorDescription(string command, string error)
@@ -364,50 +371,47 @@ public class Claire
 
     private async Task ExecuteIntentCommand(ChatResponse intent)
     {
-        _output.WriteSystem($"I believe the command you are looking for is:");
-        _output.WriteChat($"{intent.Response}");
-        _output.WriteLine();
-        _output.WriteSystem($"Shall I executed it for you? (Y/N): ");
+        _userInterface.WriteSystem($"I believe the command you are looking for is:");
+        _userInterface.WriteChat($"{intent.Response}");
+        _userInterface.WriteLine();
 
-        var input = Console.ReadKey();
-
-        _output.WriteLine();  // Since input does not contain CR, move to the next line.
-
-        if (input.KeyChar == 'y' || input.KeyChar == 'Y')
+        var execute = _userInterface.PromptConfirm("Shall I executed it for you?");
+        
+        if (execute)
         {
             var result = await ExecuteCommand(intent.Response);
 
-            _output.WriteCommand(result.Output);
+            _userInterface.WriteCommand(result.Output);
 
             if (result.HasError)
             {
-                _output.WriteCommandError(result.Error);
+                _userInterface.WriteCommandError(result.Error);
 
-                _output.WriteSystem("It looks like the command encountered a problem. Investigating...");
+                _userInterface.WriteSystem("It looks like the command encountered a problem. Investigating...");
 
                 var errorDescription = await GetErrorDescription(intent.Response, result.Error);
 
-                _output.WriteChat(errorDescription);
+                _userInterface.WriteChat(errorDescription);
             }
         }
     }
 
     private async Task ExecuteIntentFile(ChatResponse action)
     {
-        _output.WriteSystem($"The following file was generated:");
-        _output.WriteChat(action.Response);
+        _userInterface.WriteSystem($"The following file was generated:");
+        _userInterface.WriteChat(action.Response);
 
-        var saveFile = _output.PromptConfirm("Would you like to save it?");
+        var saveFile = _userInterface.PromptConfirm("Would you like to save it?");
 
         if (saveFile)
         {
             if (string.IsNullOrEmpty(action.FileName))
             {
-                var fileName = _output.Prompt("Please enter a filename: ");
+                var fileName = _userInterface.Prompt("Please enter a filename: ");
 
                 if (string.IsNullOrEmpty(fileName))
                 {
-                    _output.WriteSystem("No file name provide. File will not be saved.");
+                    _userInterface.WriteSystem("No file name provide. File will not be saved.");
                     return;
                 }
                 
@@ -418,18 +422,18 @@ public class Claire
             {
                 // TODO: Need to save through working directory of the command line...
                 await File.WriteAllTextAsync(action.FileName, action.Response);
-                _output.WriteSystem($"File {action.FileName} saved.");
+                _userInterface.WriteSystem($"File {action.FileName} saved.");
             }
             catch (Exception exception)
             {
-                _output.WriteCommandError($"Could not save file {action.FileName}: {exception.Message}");
+                _userInterface.WriteCommandError($"Could not save file {action.FileName}: {exception.Message}");
             }
         }
     }
 
     private async Task ExecuteIntentExplain(ChatResponse action)
     {
-        _output.WriteChat(action.Response);
+        _userInterface.WriteChat(action.Response);
     }
 
     private async Task ExecuteIntent(ChatResponse action)
@@ -481,8 +485,8 @@ public class Claire
 
                 if (foundCommand == null)
                 {
-                    _output.WriteSystem($"Unknown command: {command}");
-                    _output.WriteSystem($"Use `/help` to see a list of commands.");
+                    _userInterface.WriteSystem($"Unknown command: {command}");
+                    _userInterface.WriteSystem($"Use `/help` to see a list of commands.");
                 }
                 else
                 {
@@ -493,9 +497,9 @@ public class Claire
             {
                 var intent = await GetPromptResult(prompt);
 
-                // _output.WriteDebug($"Intent: {intent.Type}");
-                // _output.WriteDebug($"Command: {intent.Response}");
-                // _output.WriteDebug($"File: {intent.FileName}");
+                _userInterface.WriteDebug($"Intent: {intent.Type}");
+                _userInterface.WriteDebug($"Command: {intent.Response}");
+                _userInterface.WriteDebug($"File Name: {intent.FileName}");
                 
                 await ExecuteIntent(intent);
             }
@@ -504,16 +508,30 @@ public class Claire
 
     private void CommandHelp()
     {
-        Output.WriteSystem("Available commands:");
+        UserInterface.WriteSystem("Available commands:");
 
         foreach (var command in _commands)
         {
-            Output.WriteSystem($"  /{command.Name} - {command.Description}");
+            UserInterface.WriteSystem($"  /{command.Name} - {command.Description}");
         }
     }
 
     private void CommandExit()
     {
         Stop();
+    }
+
+    private void CommandDebug()
+    {
+        if (_userInterface.DebugOutput)
+        {
+            _userInterface.DebugOutput = false;
+            _userInterface.WriteSystem("Debug output now is off");
+        }
+        else
+        {
+            _userInterface.DebugOutput = true;
+            _userInterface.WriteSystem("Debug output now is on");
+        }
     }
 }

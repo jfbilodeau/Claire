@@ -11,5 +11,11 @@
     //  - Windows: "cmd.exe"
     //  - Linux/MacOS: "bash"
     "process": "",
+    // Number of messages to keep in history
+    // This includes both user and system messages, so one round-trip is two messages
+    // Furthermore, a starter prompt will always be added to the start of the history and the current prompt will be added to the end
+    // This means that the total number of sent to Azure OpenAI will be <=(history) + 2
+    "chatHistorySize": 10,
+    // Enable debug output.
     "debug": false
 }
