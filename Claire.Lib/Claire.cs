@@ -248,9 +248,18 @@ public class Claire
     {
         var filePrompt = $"Generate the file requested below:\n\n";
         filePrompt += $"{prompt}\n\n";
-        filePrompt += $"Respond only the content of the file. Do not include explanations or markdown.";
+        filePrompt += $"Respond with only the content of the file without any Markdown annotation. No additional text before or after the content of the file. Comments are permissible";
 
         var responseText = await ExecuteChatPrompt(filePrompt, saveHistory: true);
+
+        if (responseText.StartsWith("```"))
+        {
+            //Strip off the markdown
+            var lines = responseText.Split('\n');
+
+            responseText = string.Join("\n", lines.Skip(1).SkipLast(1));
+
+        }
         
         intent.Response = responseText;
 
@@ -401,7 +410,7 @@ public class Claire
         _userInterface.WriteSystem($"The following file was generated:");
         _userInterface.WriteChat(action.Response);
 
-        var saveFile = _userInterface.PromptConfirm("Would you like to save it?");
+        var saveFile = _userInterface.PromptConfirm("Would you like to save the file?");
 
         if (saveFile)
         {
