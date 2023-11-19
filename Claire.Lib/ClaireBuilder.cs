@@ -6,22 +6,16 @@ namespace Claire;
 
 public class ClaireBuilder
 {
-    private IConfigurationRoot? _configuration;
+    private readonly ConfigurationBuilder _configurationBuilder = new ConfigurationBuilder();
 
     public ClaireBuilder()
     {
     }
 
     public ClaireBuilder WithDefaultConfiguration(Assembly assembly)
-    {
-        if (_configuration != null)
-        {
-            throw new ApplicationException("Configuration already set");
-        }
-
+    { 
         // Build configuration
-        _configuration = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
+        _configurationBuilder.SetBasePath(Directory.GetCurrentDirectory())
             .AddJsonFile("Claire.json", optional: true)
             .AddEnvironmentVariables()
             .AddUserSecrets(assembly)
@@ -32,22 +26,23 @@ public class ClaireBuilder
 
     public ClaireBuilder WithConfiguration(IConfiguration configuration)
     {
-        if (_configuration != null)
-        {
-            throw new ApplicationException("Configuration already set");
-        }
+        _configurationBuilder.AddConfiguration(configuration);
+        
+        return this;
+    }
+
+    public ClaireBuilder WithCommandLine(string[] args)
+    {
+        _configurationBuilder.AddCommandLine(args);
 
         return this;
     }
 
     public Claire Build()
     {
-        if (_configuration == null)
-        {
-            throw new ClaireException("WithConfiguration or WithDefaultConfiguration must be called before Build");
-        }
+        var configuration = _configurationBuilder.Build();
 
-        var claireConfiguration = _configuration.Get<ClaireConfiguration>();
+        var claireConfiguration = configuration.Get<ClaireConfiguration>();
 
         // This check removes the warning about claireConfiguration being null
         if (claireConfiguration == null)
