@@ -95,7 +95,7 @@ public class ClaireShell
 
     private async Task<string> ReadUntilPrompt(StreamReader reader)
     {
-        var EndStreamToken = $"{ClaireShellPrompt}{_processWriter.NewLine}";
+        var endStreamToken = $"{ClaireShellPrompt}{_processWriter.NewLine}";
 
         var response = string.Empty;
         var buffer = new char[4096];
@@ -105,14 +105,14 @@ public class ClaireShell
         {
             response += new string(buffer, 0, byteRead);
 
-            if (response.Contains(EndStreamToken))
+            if (response.Contains(endStreamToken))
             {
                 break;
             }
         }
 
         // Remove the delimiter from the end of the response
-        response = response.Replace(EndStreamToken, string.Empty);
+        response = response.Replace(endStreamToken, string.Empty);
 
         return response;
     }
