@@ -9,29 +9,50 @@ public class ClaireShell
 
     private readonly string _shellProcessName;
     private readonly string _commandPrefix = string.Empty;
-    private readonly string _commandSuffix = string.Empty;
-    private readonly Process _process;
-    private readonly StreamWriter _processWriter;
-    private readonly StreamReader _processReader;
-    private readonly StreamReader _processErrorReader;
+    private string _commandSuffix = string.Empty;
+    private Process _process;
+    private StreamWriter _processWriter;
+    private StreamReader _processReader;
+    private StreamReader _processErrorReader;
 
     private bool executingCommand = false;
 
     public ClaireShell(string shellProcessName)
     {
         _shellProcessName = shellProcessName;
-
-        var arguments = string.Empty;
-
+        
         if (_shellProcessName.Contains("bash"))
         {
             // Bash does not echo the shell prompt to stdout so need output it manually
             _commandSuffix = $" ; echo {ClaireShellPrompt}";
         }
 
+        CreateShellProcess();
+    }
+
+    public void Reset()
+    {
+        FreeShellProcess();
+        CreateShellProcess();
+    }
+
+    private void FreeShellProcess()
+    {
+        _process.Kill();
+        _process.Dispose();
+        
+        _processWriter.Dispose();
+        _processReader.Dispose();
+        _processErrorReader.Dispose();
+    }
+
+    private void CreateShellProcess()
+    {
+        var arguments = string.Empty;
+
         var processStartInfo = new ProcessStartInfo
         {
-            FileName = shellProcessName,
+            FileName = _shellProcessName,
             Arguments = arguments,
             UseShellExecute = false,
             RedirectStandardInput = true,
@@ -40,6 +61,7 @@ public class ClaireShell
             CreateNoWindow = true,
             WorkingDirectory = Directory.GetCurrentDirectory(),
         };
+
         var process = Process.Start(processStartInfo);
 
         _process = process ?? throw new Exception("Failed to start backend console");
@@ -50,24 +72,24 @@ public class ClaireShell
 
         // Set the shell prompt to include delimiter.
         // This is used to detect when a command has finished executing.
-        if (shellProcessName.Contains("bash"))
+        if (_shellProcessName.Contains("bash"))
         {
-            // Execute($"export PS1=\"{ClaireShellPrompt}\\n$PS1\"").Wait();
             // Using _commandSuffix instead to output the `ClairShellPrompt` to stdout
         }
-        else if (shellProcessName.Contains("cmd", StringComparison.InvariantCultureIgnoreCase))
+        else if (_shellProcessName.Contains("cmd", StringComparison.InvariantCultureIgnoreCase))
         {
             Execute($"prompt {ClaireShellPrompt}$_$P$G").Wait();
         }
-        else if (shellProcessName.Contains("powershell", StringComparison.InvariantCultureIgnoreCase))
+        else if (_shellProcessName.Contains("powershell", StringComparison.InvariantCultureIgnoreCase))
         {
-            Execute(
-                    $"function prompt {{ \"{ClaireShellPrompt}`n$($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) \" }}")
-                .Wait();
+            var prompt =
+                $"function prompt {{ \"{ClaireShellPrompt}`r`n$($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) \" }}";
+            
+            Execute(prompt).Wait();
         }
         else
         {
-            throw new Exception($"Unknown shell name: {shellProcessName}");
+            throw new Exception($"Unknown shell name: {_shellProcessName}");
         }
     }
 
@@ -134,7 +156,7 @@ public class ClaireShell
             Output = await ReadUntilPrompt(_processReader),
             Error = await ReadUntilEnd(_processErrorReader),
         };
-        
+
         executingCommand = false;
 
         return result;
