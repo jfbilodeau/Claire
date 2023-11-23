@@ -26,6 +26,7 @@ public class Claire
 
     private readonly ClaireConfiguration _configuration;
     private readonly OpenAIClient _openAiClient;
+
     private readonly ClaireShell _shell;
     // private readonly Process _process;
     // private readonly StreamWriter _processWriter;
@@ -44,7 +45,7 @@ public class Claire
         _configuration = configuration;
 
         _userInterface.DebugOutput = _configuration.Debug;
-        
+
         // Initialize commands
         _commands.Add(new CommandDefinition("help", "Display a list of commands", CommandHelp));
         _commands.Add(new CommandDefinition("debug", "Enable/disable debug output", CommandDebug));
@@ -55,10 +56,10 @@ public class Claire
             new Uri(_configuration.OpenAiUrl),
             new AzureKeyCredential(_configuration.OpenAiKey)
         );
-        
+
         // Create shell
         _shell = new ClaireShell(_configuration.ShellProcessName);
-        
+
         // Create backend console.
         // var processStartInfo = new ProcessStartInfo
         // {
@@ -105,15 +106,16 @@ public class Claire
     private List<ChatMessage> PrepareChatMessages(string prompt)
     {
         var messages = GetConversationHistory(10);
-        
+
         // Always initialize conversation with starter prompt
-        var starterPrompt = $"You are Claire, a Command-Line AI Runtime Environment who guides users with the {_configuration.ShellProcessName} shell.\n";
+        var starterPrompt =
+            $"You are Claire, a Command-Line AI Runtime Environment who guides users with the {_configuration.ShellProcessName} shell.\n";
         starterPrompt += "You will provide command, scripts, configuration files and explanation to the user\n";
         starterPrompt += "You will also provide help with using the Azure CLI.\n";
         var starterMessage = new ChatMessage("system", starterPrompt);
-        
+
         messages.Insert(0, starterMessage);
-        
+
         messages.Add(new ChatMessage(ConvertMessageTypeToRole(MessageType.User), prompt));
 
         return messages;
@@ -153,13 +155,13 @@ public class Claire
         var messages = PrepareChatMessages(prompt);
 
         var options = new ChatCompletionsOptions(_configuration.OpenAiModel, messages);
-        
+
         _userInterface.WriteDebug($"prompt: {prompt}");
 
         var response = await _openAiClient.GetChatCompletionsAsync(options);
 
         var responseMessage = response.Value.Choices[0].Message.Content;
-        
+
         _userInterface.WriteDebug($"response: {responseMessage}");
 
         if (saveHistory)
@@ -173,7 +175,8 @@ public class Claire
 
     private async Task<ChatResponse> GetIntentAsync(string prompt, ChatResponse intent)
     {
-        var intentPrompt = $"Determine if the following statement is asking about a specific command, generate a file, or an explanation:\n\n";
+        var intentPrompt =
+            $"Determine if the following statement is asking about a specific command, generate a file, or an explanation:\n\n";
         intentPrompt += $"\"{prompt}\"\n\n";
         intentPrompt += $"Reply only with the word `command`, `file`, `explain` or 'unknown.";
 
@@ -222,6 +225,8 @@ public class Claire
         commandPrompt += $"Reply with only the text for the command. Do not include explanation or markdown.";
 
         var commandText = await ExecuteChatPrompt(commandPrompt, saveHistory: true);
+        
+        commandText = RemoveMarkdown(commandText);
 
         intent.Response = commandText;
 
@@ -232,9 +237,12 @@ public class Claire
     {
         var fileNamePrompt = $"Provide the file name associated with this prompt:\n\n";
         fileNamePrompt += $"{prompt}\n\n";
-        fileNamePrompt += $"Provide only the file name in the response. No additional text. If no file name are found in the prompt, then respond with the following text: <<unknown>>";
+        fileNamePrompt +=
+            $"Provide only the file name in the response. No additional text. If no file name are found in the prompt, then respond with the following text: <<unknown>>";
 
         var fileName = await ExecuteChatPrompt(fileNamePrompt);
+
+        fileName = RemoveMarkdown(fileName);
 
         if (fileName.Contains("<<unknown>>"))
         {
@@ -246,23 +254,30 @@ public class Claire
         return intent;
     }
 
+    private string RemoveMarkdown(string text)
+    {
+        if (text.StartsWith("```"))
+        {
+            //Strip off the markdown
+            var lines = text.Split('\n');
+
+            text = string.Join("\n", lines.Skip(1).SkipLast(1));
+        }
+
+        return text;
+    }
+
     private async Task<ChatResponse> GetFileAsync(string prompt, ChatResponse intent)
     {
         var filePrompt = $"Generate the file requested below:\n\n";
         filePrompt += $"{prompt}\n\n";
-        filePrompt += $"Respond with only the content of the file without any Markdown annotation. No additional text before or after the content of the file. Comments are permissible";
+        filePrompt +=
+            $"Respond with only the content of the file without any Markdown annotation. No additional text before or after the content of the file. Comments are permissible";
 
         var responseText = await ExecuteChatPrompt(filePrompt, saveHistory: true);
 
-        if (responseText.StartsWith("```"))
-        {
-            //Strip off the markdown
-            var lines = responseText.Split('\n');
+        responseText = RemoveMarkdown(responseText);
 
-            responseText = string.Join("\n", lines.Skip(1).SkipLast(1));
-
-        }
-        
         intent.Response = responseText;
 
         return intent;
@@ -306,7 +321,7 @@ public class Claire
             default:
                 throw new Exception("Internal error: Unknown intent type");
         }
-        
+
         _messages.Add(new Message()
         {
             Type = MessageType.User,
@@ -316,7 +331,7 @@ public class Claire
 
         return intent;
     }
-    
+
     // private async Task<string> ReadStream(StreamReader reader)
     // {
     //     var builder = new StringBuilder();
@@ -344,12 +359,12 @@ public class Claire
         try
         {
             _userInterface.WriteDebug($"command: {command}");
-            
+
             var result = await _shell.Execute(command);
-            
+
             _userInterface.WriteDebug($"stdout: {result.Output}");
             _userInterface.WriteDebug($"stderr: {result.Error}");
-            
+
             // await _processWriter.WriteAsync($"{command}{_processWriter.NewLine}");
             // await _processWriter.FlushAsync();
             //
@@ -366,7 +381,7 @@ public class Claire
             return result;
         }
         catch (Exception exception)
-        {   
+        {
             Console.WriteLine($"Exception: {exception.Message}");
             throw;
         }
@@ -394,7 +409,7 @@ public class Claire
         _userInterface.WriteLine();
 
         var execute = _userInterface.PromptConfirm("Shall I executed it for you?");
-        
+
         if (execute)
         {
             var result = await ExecuteCommand(intent.Response);
@@ -432,7 +447,7 @@ public class Claire
                     _userInterface.WriteSystem("No file name provide. File will not be saved.");
                     return;
                 }
-                
+
                 action.FileName = fileName;
             }
 
@@ -477,7 +492,6 @@ public class Claire
             default:
                 throw new Exception($"Unexpected response: {action.Type}");
         }
-
     }
 
     public void Stop()
@@ -518,7 +532,7 @@ public class Claire
                 _userInterface.WriteDebug($"Intent: {intent.Type}");
                 _userInterface.WriteDebug($"Command: {intent.Response}");
                 _userInterface.WriteDebug($"File Name: {intent.FileName}");
-                
+
                 await ExecuteIntent(intent);
             }
         }
