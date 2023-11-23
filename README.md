@@ -35,22 +35,26 @@ As of now, there is no binary distribution of Claire. Source only. You will need
 
 You will also need an Azure account with OpenAI enabled. You can sign up for a free account [free account (azure.microsoft.com/free/)](https://azure.microsoft.com/free/).
 
-#### Cloning Claire
+#### Quick start
+
+In a terminal
+
 1. `git clone https://github.com/jfbilodeau/Claire.git`
 2. `cd ./Claire/Claire`
-3. `dotnet run`
+3. `dotnet run --OpenAiUrl URL --OpenAiKey KEY --OpenAiModel MODEL_NAME`
 
-The last line (`dotnet run`) **will** fail because we need to pass configuration to Claire. There are different ways by which you can configure Claire.
 
 The following parameters are supported by Claire:
 
-| Parameter | Required | Description                                                                                              |
-|-----------|----------|----------------------------------------------------------------------------------------------------------|
-|OpenAiUrl|Yes|The URL of the OpenAI API                                                                                |
-|OpenAiKey|Yes|The key of the OpenAI API                                                                                |
-|OpenAiModel|Yes|The name of the OpenAI model to use                                                                      |
-|ShellProcessName|No|The name of the shell to use. Default is `bash` on Linux and MacOS. `cmd` on Windows. PowerShell is also supported.|
-|ChatHistorySize|No|The number of chat history to keep and re-send to Azure OpenAI. This maintains a limited conversation state between the user and Azure OpenAI. Default is 10.|
+| Parameter | Type | Required | Description  |
+|-|-|-|-|
+|OpenAiUrl|`string`|Yes|The URL of the OpenAI API                                                                                |
+|OpenAiKey|`string`|Yes|The key of the OpenAI API                                                                                |
+|OpenAiModel|`string`|Yes|The name of the OpenAI model to use                                                                      |
+|ShellProcessName|`string`|No|The name of the shell to use. Default is `bash` on Linux and MacOS. `cmd` on Windows. PowerShell is also supported.|
+|ChatHistorySize|`int`|No|The number of chat history to keep and re-send to Azure OpenAI. This maintains a limited conversation state between the user and Azure OpenAI. Default is 10.|
+|SuggestCompletions|`boolean`|No|Should Claire provide suggestions to complete user prompt?|
+|SuggestionDelay|`int`|No|Number of milliseconds to wait after user typed a key before attempting to complete user prompt.|
 
 Parameters may be passed to Claires using the following methods:
 - Provide them in `<<project-root>>/Claire/Claire/Claire.csproj`

@@ -1,11 +1,14 @@
 ﻿using Claire;
 
+Console.Title = "Claire";
+
 Console.WriteLine("Starting Claire...");
 
 // Create Claire
 
 var claire = new ClaireBuilder()
     .WithDefaultConfiguration(typeof(Program).Assembly)
+    .WithCommandLine(args)
     .Build();
 
 await claire.Run();

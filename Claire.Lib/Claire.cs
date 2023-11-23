@@ -1,3 +1,5 @@
+using System.Runtime.ConstrainedExecution;
+using System.Runtime.Serialization;
 using System.Text;
 using Azure;
 using Azure.AI.OpenAI;
@@ -6,33 +8,30 @@ namespace Claire;
 
 public class Claire
 {
-    private class CommandDefinition
+    private class CommandDefinition(string name, string description, Action function)
     {
-        public CommandDefinition(string name, string description, Action function)
-        {
-            Name = name;
-            Description = description;
-            Function = function;
-        }
-
-        public readonly string Name;
-        public readonly string Description;
-        public readonly Action Function;
+        public readonly string Name = name;
+        public readonly string Description = description;
+        public readonly Action Execute = function;
     }
 
     private readonly UserInterface _userInterface = new();
 
-    private readonly List<CommandDefinition> _commands = new();
+    private readonly List<CommandDefinition> _commands = [];
 
     private readonly ClaireConfiguration _configuration;
     private readonly OpenAIClient _openAiClient;
+
+    // Prompt completion state
+    private string _promptCompletion = string.Empty;
+    private CancellationTokenSource _promptCompletionCancellationTokenSource = new();
+
     private readonly ClaireShell _shell;
-    // private readonly Process _process;
-    // private readonly StreamWriter _processWriter;
-    // private readonly StreamReader _processReader;
-    // private readonly StreamReader _processErrorReader;
 
     private readonly IList<Message> _messages = new List<Message>();
+
+    private readonly ChatMessage _promptStartMessage;
+    private readonly ChatMessage _completionStartMessage;
 
     private bool _active = false;
 
@@ -44,7 +43,7 @@ public class Claire
         _configuration = configuration;
 
         _userInterface.DebugOutput = _configuration.Debug;
-        
+
         // Initialize commands
         _commands.Add(new CommandDefinition("help", "Display a list of commands", CommandHelp));
         _commands.Add(new CommandDefinition("debug", "Enable/disable debug output", CommandDebug));
@@ -55,29 +54,22 @@ public class Claire
             new Uri(_configuration.OpenAiUrl),
             new AzureKeyCredential(_configuration.OpenAiKey)
         );
-        
+
         // Create shell
         _shell = new ClaireShell(_configuration.ShellProcessName);
-        
-        // Create backend console.
-        // var processStartInfo = new ProcessStartInfo
-        // {
-        //     FileName = _configuration.ShellProcessName,
-        //     UseShellExecute = false,
-        //     RedirectStandardInput = true,
-        //     RedirectStandardOutput = true,
-        //     RedirectStandardError = true,
-        //     // CreateNoWindow = !_configuration.Debug,
-        //     CreateNoWindow = false,
-        //     WorkingDirectory = Directory.GetCurrentDirectory(),
-        // };
-        // var process = Process.Start(processStartInfo);
-        //
-        // _process = process ?? throw new Exception("Failed to start backend console");
-        //
-        // _processWriter = _process.StandardInput;
-        // _processReader = _process.StandardOutput;
-        // _processErrorReader = _process.StandardError;
+
+        // Create starter prompt
+        var intro = $"You are Claire, a Command-Line AI Runtime Environment who guides users with the {_configuration.ShellProcessName} shell.\n";
+
+        var starterPrompt = intro;
+        starterPrompt += "You will provide command, scripts, configuration files and explanation to the user\n";
+        starterPrompt += "You will also provide help with using the Azure CLI.\n";
+        _promptStartMessage = new ChatMessage("system", starterPrompt);
+
+        // Create completion prompt
+        var completionPrompt = intro;
+        completionPrompt += "Users will provide the start of a question related to the shell or command and you will complete the question or command for them. Do not answer the question. Just provide a completion. Make sure to include a space at the start of the completion if necessary.";
+        _completionStartMessage = new ChatMessage("system", completionPrompt);
     }
 
     private void AddMessage(MessageType messageType, string text)
@@ -94,40 +86,178 @@ public class Claire
     private List<ChatMessage> GetConversationHistory(int size)
     {
         var messages = _messages
-            .Where(m => m.Type == MessageType.Claire || m.Type == MessageType.User)
-            .Select(m => new ChatMessage(ConvertMessageTypeToRole(m.Type), m.Text))
+            .Select(m => new ChatMessage(Message.MessageTypeToString(m.Type), m.Text))
             .TakeLast(_configuration.ChatHistorySize)
             .ToList();
 
         return messages;
     }
 
-    private List<ChatMessage> PrepareChatMessages(string prompt)
+    private List<ChatMessage> PrepareChatMessages(string prompt, ChatMessage startMessage)
     {
-        var messages = GetConversationHistory(10);
-        
-        // Always initialize conversation with starter prompt
-        var starterPrompt = $"You are Claire, a Command-Line AI Runtime Environment who guides users with the {_configuration.ShellProcessName} shell.\n";
-        starterPrompt += "You will provide command, scripts, configuration files and explanation to the user\n";
-        starterPrompt += "You will also provide help with using the Azure CLI.\n";
-        var starterMessage = new ChatMessage("system", starterPrompt);
-        
-        messages.Insert(0, starterMessage);
-        
+        var messages = GetConversationHistory(_configuration.ChatHistorySize);
+
+        messages.Insert(0, startMessage);
+
         messages.Add(new ChatMessage(ConvertMessageTypeToRole(MessageType.User), prompt));
 
         return messages;
     }
 
+    private async Task GetPromptCompletionsAsync(string prompt)
+    {
+        if (!_configuration.SuggestCompletions)
+        {
+            // Suggestions are turned off.
+            return;
+        }
+
+        if (prompt.Length < 3)
+        {
+            // Wait until we have at least 3 characters
+            return;
+        }
+
+        if (prompt[0] == '/')
+        {
+            // Don't complete commands...yet?
+            return;
+        }
+
+        if (_promptCompletionCancellationTokenSource != null)
+        {
+            _promptCompletionCancellationTokenSource.Cancel();
+            _promptCompletionCancellationTokenSource.Dispose();
+        }
+
+        _promptCompletionCancellationTokenSource = new CancellationTokenSource();
+
+        _promptCompletion = string.Empty;
+
+        // Wait before requesting completions
+        await Task.Delay(_configuration.SuggestionDelay, _promptCompletionCancellationTokenSource.Token);
+
+        var requestPrompt = prompt;
+
+        _promptCompletion = await ExecuteCompletion(
+            requestPrompt,
+            _promptCompletionCancellationTokenSource.Token
+        );
+
+        _userInterface.WriteCompletion(_promptCompletion, newLine: false);
+
+        // try
+        // {
+        //     _userInterface.WriteDebug($"completion request: {prompt}");
+
+        //     var messages = PrepareChatMessages(prompt);
+        //     var prompts = messages.Select(m => m.Content).ToList();
+        //     prompts.Add(prompt);
+
+        //     _promptCompletionCancellationTokenSource?.Cancel();
+
+        //     _promptCompletionCancellationTokenSource = new CancellationTokenSource();
+
+        //     var options = new CompletionsOptions(_configuration.OpenAiModel, prompts);
+
+        //     // https://github.com/Azure/azure-sdk-for-net/pull/40155
+        //     options.DeploymentName = _configuration.OpenAiModel;
+
+        //     var response = await _openAiClient.GetCompletionsAsync(options, _promptCompletionCancellationTokenSource.Token);
+
+        //     _promptCompletion = response.Value.Choices[0].Text;
+
+        //     _userInterface.WriteCompletion($"completion response: {_promptCompletion}");
+        // }
+        // catch (Exception exception)
+        // {
+        //     _userInterface.WriteDebug($"completion exception: {exception.Message}");
+        // }
+    }
+
+    private void ErasePromptCompletion()
+    {
+        if (_promptCompletion.Length > 0)
+        {
+            var backSpaces = new string('\b', _promptCompletion.Length);
+            var spaces = new string(' ', _promptCompletion.Length);
+
+            Console.Write(backSpaces);
+            Console.Write(spaces);
+            Console.Write(backSpaces);
+        }
+    }
+
     private string GetUserPrompt()
     {
-        string? prompt;
+        string prompt = string.Empty;
 
         do
         {
-            _userInterface.WriteSystem("Please tell me what you would like to do?");
+            _userInterface.WriteSystem("Please tell me what you would like to do?", newLine: false);
+            if (_configuration.SuggestCompletions)
+            {
+                _userInterface.WriteSystem(" (Press TAB for suggestions)", newLine: false);
+            }
+            _userInterface.NextLine();
 
-            prompt = Console.ReadLine();
+            char keyChar;
+
+            do
+            {
+                var key = Console.ReadKey(true);
+                keyChar = key.KeyChar;
+
+                ErasePromptCompletion();
+
+                switch (keyChar)
+                {
+                    case '\t':
+                        if (_promptCompletion.Length > 0)
+                        {
+                            prompt += _promptCompletion;
+                            _userInterface.WriteInput(_promptCompletion, newLine: false);
+
+                            // We purposely don't `await` this call to allow user to continue typing
+                            _ = GetPromptCompletionsAsync(prompt);
+                        }
+                        break;
+
+                    case '\r':
+                    case '\n':
+                        // Ignore CR/LF. They are checked for at the end of the loop.
+                        break;
+
+                    case '\b':
+                        if (prompt.Length > 0)
+                        {
+                            if (Console.CursorLeft == 0)
+                            {
+                                // On a new line. Need to re-draw the prompt.
+                                _userInterface.WriteInput(prompt, newLine: false);
+                            }
+                            else
+                            {
+                                // Erase the last character
+                                prompt = prompt.Substring(0, prompt.Length - 1);
+                                Console.Write("\b \b"); // Erase the current character with a space, and back again
+                            }
+                        }
+                        break;
+
+                    default:
+                        prompt += keyChar;
+                        _userInterface.WriteInput(keyChar.ToString(), newLine: false);
+
+                        // We purposely don't `await` this call to allow user to continue typing
+                        _ = GetPromptCompletionsAsync(prompt);
+
+                        break;
+                }
+            } while (keyChar != '\r' && keyChar != '\n');
+
+            // Move to the next line.
+            _userInterface.NextLine();
 
             if (string.IsNullOrWhiteSpace(prompt))
             {
@@ -150,16 +280,40 @@ public class Claire
 
     private async Task<string> ExecuteChatPrompt(string prompt, bool saveHistory = false)
     {
-        var messages = PrepareChatMessages(prompt);
+        return await ExecuteChat(
+            prompt,
+            _promptStartMessage,
+            temperature: 0.7f,
+            maxTokens: 800,
+            saveHistory: saveHistory
+        );
+    }
+
+    private async Task<string> ExecuteCompletion(string prompt, CancellationToken cancellationToken)
+    {
+        return await ExecuteChat(
+            prompt,
+            _completionStartMessage,
+            temperature: 0.0f,
+            maxTokens: 20,
+            cancellationToken: cancellationToken,
+            saveHistory: false
+        );
+    }
+
+    private async Task<string> ExecuteChat(string prompt, ChatMessage startMessage, float temperature = 0.7f, int maxTokens = 800, CancellationToken cancellationToken = new CancellationToken(), bool saveHistory = false)
+    {
+        var messages = PrepareChatMessages(prompt, startMessage);
 
         var options = new ChatCompletionsOptions(_configuration.OpenAiModel, messages);
-        
+        options.Temperature = temperature;
+
         _userInterface.WriteDebug($"prompt: {prompt}");
 
-        var response = await _openAiClient.GetChatCompletionsAsync(options);
+        var response = await _openAiClient.GetChatCompletionsAsync(options, cancellationToken);
 
         var responseMessage = response.Value.Choices[0].Message.Content;
-        
+
         _userInterface.WriteDebug($"response: {responseMessage}");
 
         if (saveHistory)
@@ -250,7 +404,7 @@ public class Claire
     {
         var filePrompt = $"Generate the file requested below:\n\n";
         filePrompt += $"{prompt}\n\n";
-        filePrompt += $"Respond with only the content of the file without any Markdown annotation. No additional text before or after the content of the file. Comments are permissible";
+        filePrompt += $"Respond with only the content of the file without any Markdown annotation. No additional text before or after the content of the file. Comments in the file are permissible";
 
         var responseText = await ExecuteChatPrompt(filePrompt, saveHistory: true);
 
@@ -262,7 +416,7 @@ public class Claire
             responseText = string.Join("\n", lines.Skip(1).SkipLast(1));
 
         }
-        
+
         intent.Response = responseText;
 
         return intent;
@@ -306,7 +460,7 @@ public class Claire
             default:
                 throw new Exception("Internal error: Unknown intent type");
         }
-        
+
         _messages.Add(new Message()
         {
             Type = MessageType.User,
@@ -316,58 +470,23 @@ public class Claire
 
         return intent;
     }
-    
-    // private async Task<string> ReadStream(StreamReader reader)
-    // {
-    //     var builder = new StringBuilder();
-    //     var buffer = new char[4096];
-    //     int byteRead;
-    //
-    //     var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
-    //     try
-    //     {
-    //         while ((byteRead = await reader.ReadAsync(buffer, cancellationTokenSource.Token)) > 0)
-    //         {
-    //             builder.Append(buffer, 0, byteRead);
-    //         }
-    //     }
-    //     catch (OperationCanceledException)
-    //     {
-    //         // reader.ReadAsync will throw a TaskCanceledException when the timeout is reached.
-    //     }
-    //
-    //     return builder.ToString();
-    // }
 
     private async Task<ShellResult> ExecuteCommand(string command)
     {
         try
         {
             _userInterface.WriteDebug($"command: {command}");
-            
+
             var result = await _shell.Execute(command);
-            
+
             _userInterface.WriteDebug($"stdout: {result.Output}");
             _userInterface.WriteDebug($"stderr: {result.Error}");
-            
-            // await _processWriter.WriteAsync($"{command}{_processWriter.NewLine}");
-            // await _processWriter.FlushAsync();
-            //
-            // var readDelay = TimeSpan.FromSeconds(1);
-            //
-            // await Task.Delay(readDelay);
-            //
-            // var result = new ShellResult
-            // {
-            //     Output = await ReadStream(_processReader),
-            //     Error = await ReadStream(_processErrorReader),
-            // };
 
             return result;
         }
         catch (Exception exception)
-        {   
-            Console.WriteLine($"Exception: {exception.Message}");
+        {
+            _userInterface.WriteError($"Exception: {exception.Message}");
             throw;
         }
     }
@@ -390,11 +509,11 @@ public class Claire
     private async Task ExecuteIntentCommand(ChatResponse intent)
     {
         _userInterface.WriteSystem($"I believe the command you are looking for is:");
-        _userInterface.WriteChat($"{intent.Response}");
-        _userInterface.WriteLine();
+        _userInterface.WriteChatResponse($"{intent.Response}");
+        _userInterface.NextLine();
 
         var execute = _userInterface.PromptConfirm("Shall I executed it for you?");
-        
+
         if (execute)
         {
             var result = await ExecuteCommand(intent.Response);
@@ -409,7 +528,7 @@ public class Claire
 
                 var errorDescription = await GetErrorDescription(intent.Response, result.Error);
 
-                _userInterface.WriteChat(errorDescription);
+                _userInterface.WriteChatResponse(errorDescription);
             }
         }
     }
@@ -417,7 +536,7 @@ public class Claire
     private async Task ExecuteIntentFile(ChatResponse action)
     {
         _userInterface.WriteSystem($"The following file was generated:");
-        _userInterface.WriteChat(action.Response);
+        _userInterface.WriteChatResponse(action.Response);
 
         var saveFile = _userInterface.PromptConfirm("Would you like to save the file?");
 
@@ -432,7 +551,7 @@ public class Claire
                     _userInterface.WriteSystem("No file name provide. File will not be saved.");
                     return;
                 }
-                
+
                 action.FileName = fileName;
             }
 
@@ -451,7 +570,7 @@ public class Claire
 
     private async Task ExecuteIntentExplain(ChatResponse action)
     {
-        _userInterface.WriteChat(action.Response);
+        _userInterface.WriteChatResponse(action.Response);
     }
 
     private async Task ExecuteIntent(ChatResponse action)
@@ -487,7 +606,7 @@ public class Claire
 
     public async Task Run()
     {
-        Console.WriteLine("Welcome to Claire. Where would you like to go today?");
+        _userInterface.WriteSystem("Welcome to Claire. Where would you like to go today?");
 
         _active = true;
 
@@ -499,29 +618,33 @@ public class Claire
             {
                 var command = prompt.Substring(1);
 
-                var foundCommand = _commands.FirstOrDefault(c => c.Name == command);
+                var commandDefinition = _commands.FirstOrDefault(c => c.Name == command);
 
-                if (foundCommand == null)
+                if (commandDefinition == null)
                 {
                     _userInterface.WriteSystem($"Unknown command: {command}");
                     _userInterface.WriteSystem($"Use `/help` to see a list of commands.");
                 }
                 else
                 {
-                    foundCommand.Function();
+                    commandDefinition.Execute();
                 }
             }
             else
             {
+                _userInterface.WriteSystem("Let me think about that for a moment...");
+
                 var intent = await GetPromptResult(prompt);
 
                 _userInterface.WriteDebug($"Intent: {intent.Type}");
                 _userInterface.WriteDebug($"Command: {intent.Response}");
                 _userInterface.WriteDebug($"File Name: {intent.FileName}");
-                
+
                 await ExecuteIntent(intent);
             }
         }
+
+        _userInterface.Reset();
     }
 
     private void CommandHelp()
