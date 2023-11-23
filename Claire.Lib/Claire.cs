@@ -327,7 +327,8 @@ public class Claire
 
     private async Task<ChatResponse> GetIntentAsync(string prompt, ChatResponse intent)
     {
-        var intentPrompt = $"Determine if the following statement is asking about a specific command, generate a file, or an explanation:\n\n";
+        var intentPrompt =
+            $"Determine if the following statement is asking about a specific command, generate a file, or an explanation:\n\n";
         intentPrompt += $"\"{prompt}\"\n\n";
         intentPrompt += $"Reply only with the word `command`, `file`, `explain` or 'unknown.";
 
@@ -376,6 +377,8 @@ public class Claire
         commandPrompt += $"Reply with only the text for the command. Do not include explanation or markdown.";
 
         var commandText = await ExecuteChatPrompt(commandPrompt, saveHistory: true);
+        
+        commandText = RemoveMarkdownFences(commandText);
 
         intent.Response = commandText;
 
@@ -386,9 +389,12 @@ public class Claire
     {
         var fileNamePrompt = $"Provide the file name associated with this prompt:\n\n";
         fileNamePrompt += $"{prompt}\n\n";
-        fileNamePrompt += $"Provide only the file name in the response. No additional text. If no file name are found in the prompt, then respond with the following text: <<unknown>>";
+        fileNamePrompt +=
+            $"Provide only the file name in the response. No additional text. If no file name are found in the prompt, then respond with the following text: <<unknown>>";
 
         var fileName = await ExecuteChatPrompt(fileNamePrompt);
+
+        fileName = RemoveMarkdownFences(fileName);
 
         if (fileName.Contains("<<unknown>>"))
         {
@@ -400,6 +406,19 @@ public class Claire
         return intent;
     }
 
+    private string RemoveMarkdownFences(string text)
+    {
+        if (text.StartsWith("```"))
+        {
+            //Strip off the markdown
+            var lines = text.Split('\n');
+
+            text = string.Join("\n", lines.Skip(1).SkipLast(1));
+        }
+
+        return text;
+    }
+
     private async Task<ChatResponse> GetFileAsync(string prompt, ChatResponse intent)
     {
         var filePrompt = $"Generate the file requested below:\n\n";
@@ -408,14 +427,7 @@ public class Claire
 
         var responseText = await ExecuteChatPrompt(filePrompt, saveHistory: true);
 
-        if (responseText.StartsWith("```"))
-        {
-            //Strip off the markdown
-            var lines = responseText.Split('\n');
-
-            responseText = string.Join("\n", lines.Skip(1).SkipLast(1));
-
-        }
+        responseText = RemoveMarkdownFences(responseText);
 
         intent.Response = responseText;
 
@@ -487,6 +499,7 @@ public class Claire
         catch (Exception exception)
         {
             _userInterface.WriteError($"Exception: {exception.Message}");
+
             throw;
         }
     }
@@ -596,7 +609,6 @@ public class Claire
             default:
                 throw new Exception($"Unexpected response: {action.Type}");
         }
-
     }
 
     public void Stop()
