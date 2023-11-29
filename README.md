@@ -11,15 +11,15 @@ I am Claire, a virtual assistant designed to guide users in using the Bash shell
 ```
 
 Claire is a proof of concept as well as a demo of Azure OpenAI and prompt engineering. Claire provide a natural-language, conversational interface to the command line.
-- [x] Claire is able to suggest commands based on natural-language user request
-- [x] Claire is able to execute commands and provide the results to the user
-- [x] Claire supports the Windows command line (`cmd` -- aka DOS Prompt), PowerShell, and Bash
-- [x] Claire attemps to automatically explain errors when a command issues errors via `stderr`)
-- [x] Users are able to request explanation of commands and errors
-- [x] Claire can generate configuration files (ie: Bicep) and scripts (`.bat`, `.ps1`, etc). Claire can also save them to the user's computer
-- [x] Claire is able to assist with the [AZ CLI (https://learn.microsoft.com/en-us/cli/azure/)](https://learn.microsoft.com/en-us/cli/azure/)
-- [x] Claire is written in .NET 8.0 runs on Linux, MacOS, and Windows
-- [x] Claire can be containerized to run in a sandboxed environment
+- Claire is able to suggest commands based on natural-language user request
+- Claire is able to execute commands and provide the results to the user
+- Claire supports the Windows command line (`cmd` -- aka DOS Prompt), PowerShell, and Bash
+- Claire attemps to automatically explain errors when a command issues errors via `stderr`)
+- Users are able to request explanation of commands and errors
+- Claire can generate configuration files (ie: Bicep) and scripts (`.bat`, `.ps1`, etc). Claire can also save them to the user's computer
+- Claire is able to assist with the [AZ CLI (https://learn.microsoft.com/en-us/cli/azure/)](https://learn.microsoft.com/en-us/cli/azure/)
+- Claire is written in .NET 8.0 runs on Linux, MacOS, and Windows
+- Claire can be containerized to run in a sandboxed environment
 
 ### Limitations and Caveats
 
