@@ -61,7 +61,7 @@ public class Claire
 
         var starterPrompt = intro;
         starterPrompt += "You will provide command, scripts, configuration files and explanation to the user\n";
-        starterPrompt += "You will also provide help with using the Azure CLI.\n";
+        starterPrompt += "You will also provide help with using the Azure CLI, generate ARM and Bicep templates and help with Github actions.\n";
         _promptStartMessage = new ChatMessage("system", starterPrompt);
 
         // Create completion prompt
@@ -143,34 +143,6 @@ public class Claire
         );
 
         _userInterface.WriteCompletion(_promptCompletion, newLine: false);
-
-        // try
-        // {
-        //     _userInterface.WriteDebug($"completion request: {prompt}");
-
-        //     var messages = PrepareChatMessages(prompt);
-        //     var prompts = messages.Select(m => m.Content).ToList();
-        //     prompts.Add(prompt);
-
-        //     _promptCompletionCancellationTokenSource?.Cancel();
-
-        //     _promptCompletionCancellationTokenSource = new CancellationTokenSource();
-
-        //     var options = new CompletionsOptions(_configuration.OpenAiModel, prompts);
-
-        //     // https://github.com/Azure/azure-sdk-for-net/pull/40155
-        //     options.DeploymentName = _configuration.OpenAiModel;
-
-        //     var response = await _openAiClient.GetCompletionsAsync(options, _promptCompletionCancellationTokenSource.Token);
-
-        //     _promptCompletion = response.Value.Choices[0].Text;
-
-        //     _userInterface.WriteCompletion($"completion response: {_promptCompletion}");
-        // }
-        // catch (Exception exception)
-        // {
-        //     _userInterface.WriteDebug($"completion exception: {exception.Message}");
-        // }
     }
 
     private void ErasePromptCompletion()
