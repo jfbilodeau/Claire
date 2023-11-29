@@ -1,6 +1,3 @@
-using System.Runtime.ConstrainedExecution;
-using System.Runtime.Serialization;
-using System.Text;
 using Azure;
 using Azure.AI.OpenAI;
 
@@ -15,7 +12,7 @@ public class Claire
         public readonly Action Execute = function;
     }
 
-    private readonly UserInterface _userInterface = new();
+    private readonly IUserInterface _userInterface;
 
     private readonly List<CommandDefinition> _commands = [];
 
@@ -36,11 +33,12 @@ public class Claire
     private bool _active = false;
 
     public ClaireConfiguration Configuration => _configuration;
-    public UserInterface UserInterface => _userInterface;
+    public IUserInterface UserInterface => _userInterface;
 
-    public Claire(ClaireConfiguration configuration)
+    public Claire(ClaireConfiguration configuration, IUserInterface userInterface)
     {
         _configuration = configuration;
+        _userInterface = userInterface;
 
         _userInterface.DebugOutput = _configuration.Debug;
 
@@ -390,16 +388,11 @@ public class Claire
         var fileNamePrompt = $"Provide the file name associated with this prompt:\n\n";
         fileNamePrompt += $"{prompt}\n\n";
         fileNamePrompt +=
-            $"Provide only the file name in the response. No additional text. If no file name are found in the prompt, then respond with the following text: <<unknown>>";
+            $"Provide only the file name in the response. No additional text. If no file name are found in the prompt, then propose an appropriate file name.";
 
         var fileName = await ExecuteChatPrompt(fileNamePrompt);
 
         fileName = RemoveMarkdownFences(fileName);
-
-        if (fileName.Contains("<<unknown>>"))
-        {
-            fileName = "";
-        }
 
         intent.FileName = fileName;
 
@@ -551,10 +544,11 @@ public class Claire
         _userInterface.WriteSystem($"The following file was generated:");
         _userInterface.WriteChatResponse(action.Response);
 
-        var saveFile = _userInterface.PromptConfirm("Would you like to save the file?");
+        var saveFile = _userInterface.PromptConfirm($"Would you like to save the file '{action.FileName}'?");
 
         if (saveFile)
         {
+
             if (string.IsNullOrEmpty(action.FileName))
             {
                 var fileName = _userInterface.Prompt("Please enter a filename: ");

@@ -6,7 +6,7 @@ Console.WriteLine("Starting Claire...");
 
 // Create Claire
 
-var claire = new ClaireBuilder()
+var claire = new ClaireBuilder(new ConsoleUserInterface())
     .WithDefaultConfiguration(typeof(Program).Assembly)
     .WithCommandLine(args)
     .Build();

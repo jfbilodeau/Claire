@@ -1,8 +1,6 @@
 namespace Claire;
 
-using Azure.AI.OpenAI;
-
-public class UserInterface
+public class ConsoleUserInterface : IUserInterface
 {
     private readonly ConsoleColor _defaultForegroundColor = Console.ForegroundColor;
     private readonly ConsoleColor _defaultBackgroundColor = Console.BackgroundColor;
@@ -97,5 +95,10 @@ public class UserInterface
     public void WriteCommandError(string message, bool newLine = true)
     {
         Write(message, ConsoleColor.Red, ConsoleColor.Black, newLine);
+    }
+
+    public void SaveFile(string fileName, string contents)
+    {
+        File.WriteAllText(fileName, contents);
     }
 }

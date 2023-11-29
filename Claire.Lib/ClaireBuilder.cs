@@ -6,11 +6,13 @@ namespace Claire;
 
 public class ClaireBuilder
 {
+    private readonly IUserInterface _userInterface;
     private readonly ConfigurationBuilder _configurationBuilder = new ConfigurationBuilder();
 
-    public ClaireBuilder()
+    public ClaireBuilder(IUserInterface userInterface)
     {
-    }
+        _userInterface = userInterface;
+    }  
 
     public ClaireBuilder WithDefaultConfiguration(Assembly assembly)
     { 
@@ -42,14 +44,8 @@ public class ClaireBuilder
     {
         var configuration = _configurationBuilder.Build();
 
-        var claireConfiguration = configuration.Get<ClaireConfiguration>();
-
-        // This check removes the warning about claireConfiguration being null
-        if (claireConfiguration == null)
-        {
-            // Should never happen but just in case
-            throw new ApplicationException("Failed to create Claire configuration");
-        }
+        var claireConfiguration = configuration.Get<ClaireConfiguration>() 
+            ?? throw new ApplicationException("Failed to create Claire configuration");
 
         // Validate configuration
         if (string.IsNullOrWhiteSpace(claireConfiguration.OpenAiUrl))
@@ -92,7 +88,7 @@ public class ClaireBuilder
             }
         }
 
-        var claire = new Claire(claireConfiguration);
+        var claire = new Claire(claireConfiguration, _userInterface);
 
         return claire;
     }
