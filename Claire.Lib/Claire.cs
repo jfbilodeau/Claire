@@ -88,7 +88,7 @@ public class Claire
             .Select<Message, ChatRequestMessage>(m => m.Type switch 
             {
                 MessageType.User => new ChatRequestUserMessage(m.Text),
-                MessageType.Claire => new ChatRequestSystemMessage(m.Text),
+                MessageType.Claire => new ChatRequestAssistantMessage(m.Text),
                 _ => throw new Exception("Internal error: Invalid message type"),
             })
             .TakeLast(_configuration.ChatHistorySize)
