@@ -74,6 +74,7 @@ I believe the command you are looking for is:
 `del /F /S /Q C:\*`
 
 Shall I executed it for you? Y/N: Y
+😱
 
 ```
 

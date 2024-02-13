@@ -1,3 +1,4 @@
+using System.Linq;
 using Azure;
 using Azure.AI.OpenAI;
 
@@ -27,8 +28,8 @@ public class Claire
 
     private readonly IList<Message> _messages = new List<Message>();
 
-    private readonly ChatMessage _promptStartMessage;
-    private readonly ChatMessage _completionStartMessage;
+    private readonly ChatRequestSystemMessage _promptStartMessage;
+    private readonly ChatRequestUserMessage _completionStartMessage;
 
     private bool _active = false;
 
@@ -62,12 +63,12 @@ public class Claire
         var starterPrompt = intro;
         starterPrompt += "You will provide command, scripts, configuration files and explanation to the user\n";
         starterPrompt += "You will also provide help with using the Azure CLI, generate ARM and Bicep templates and help with Github actions.\n";
-        _promptStartMessage = new ChatMessage("system", starterPrompt);
+        _promptStartMessage = new ChatRequestSystemMessage(starterPrompt);
 
         // Create completion prompt
         var completionPrompt = intro;
         completionPrompt += "Users will provide the start of a question related to the shell or command and you will complete the question or command for them. Do not answer the question. Just provide a completion. Make sure to include a space at the start of the completion if necessary.";
-        _completionStartMessage = new ChatMessage("system", completionPrompt);
+        _completionStartMessage = new ChatRequestUserMessage(completionPrompt);
     }
 
     private void AddMessage(MessageType messageType, string text)
@@ -81,23 +82,28 @@ public class Claire
         _messages.Add(message);
     }
 
-    private List<ChatMessage> GetConversationHistory(int size)
+    private List<ChatRequestMessage> GetConversationHistory(int size)
     {
         var messages = _messages
-            .Select(m => new ChatMessage(Message.MessageTypeToString(m.Type), m.Text))
+            .Select<Message, ChatRequestMessage>(m => m.Type switch 
+            {
+                MessageType.User => new ChatRequestUserMessage(m.Text),
+                MessageType.Claire => new ChatRequestSystemMessage(m.Text),
+                _ => throw new Exception("Internal error: Invalid message type"),
+            })
             .TakeLast(_configuration.ChatHistorySize)
             .ToList();
 
         return messages;
     }
 
-    private List<ChatMessage> PrepareChatMessages(string prompt, ChatMessage startMessage)
+    private List<ChatRequestMessage> PrepareChatMessages(string prompt, ChatRequestMessage startMessage)
     {
         var messages = GetConversationHistory(_configuration.ChatHistorySize);
 
         messages.Insert(0, startMessage);
 
-        messages.Add(new ChatMessage(ConvertMessageTypeToRole(MessageType.User), prompt));
+        messages.Add(new ChatRequestUserMessage(prompt));
 
         return messages;
     }
@@ -271,7 +277,7 @@ public class Claire
         );
     }
 
-    private async Task<string> ExecuteChat(string prompt, ChatMessage startMessage, float temperature = 0.7f, int maxTokens = 800, CancellationToken cancellationToken = new CancellationToken(), bool saveHistory = false)
+    private async Task<string> ExecuteChat(string prompt, ChatRequestMessage startMessage, float temperature = 0.7f, int maxTokens = 800, CancellationToken cancellationToken = new CancellationToken(), bool saveHistory = false)
     {
         var messages = PrepareChatMessages(prompt, startMessage);
 
@@ -582,14 +588,8 @@ public class Claire
         _active = false;
     }
 
-    public async Task Run()
+    public async Task PromptUser() 
     {
-        _userInterface.WriteSystem("Welcome to Claire. Where would you like to go today?");
-
-        _active = true;
-
-        while (_active)
-        {
             var prompt = GetUserPrompt();
 
             if (!string.IsNullOrEmpty(prompt) && prompt[0] == '/')
@@ -620,6 +620,17 @@ public class Claire
 
                 await ExecuteIntent(intent);
             }
+    }
+
+    public async Task Run()
+    {
+        _userInterface.WriteSystem("Welcome to Claire. Where would you like to go today?");
+
+        _active = true;
+
+        while (_active)
+        {
+            await PromptUser();
         }
 
         _userInterface.Reset();
