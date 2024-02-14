@@ -29,7 +29,7 @@ public class Claire
     private readonly IList<Message> _messages = new List<Message>();
 
     private readonly ChatRequestSystemMessage _promptStartMessage;
-    private readonly ChatRequestUserMessage _completionStartMessage;
+    private readonly ChatRequestSystemMessage _completionStartMessage;
 
     private bool _active = false;
 
@@ -68,7 +68,7 @@ public class Claire
         // Create completion prompt
         var completionPrompt = intro;
         completionPrompt += "Users will provide the start of a question related to the shell or command and you will complete the question or command for them. Do not answer the question. Just provide a completion. Make sure to include a space at the start of the completion if necessary.";
-        _completionStartMessage = new ChatRequestUserMessage(completionPrompt);
+        _completionStartMessage = new ChatRequestSystemMessage(completionPrompt);
     }
 
     private void AddMessage(MessageType messageType, string text)
@@ -91,7 +91,7 @@ public class Claire
                 MessageType.Claire => new ChatRequestAssistantMessage(m.Text),
                 _ => throw new Exception("Internal error: Invalid message type"),
             })
-            .TakeLast(_configuration.ChatHistorySize)
+            .TakeLast(size)
             .ToList();
 
         return messages;
