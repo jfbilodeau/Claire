@@ -291,6 +291,7 @@ public class Claire
         var responseMessage = response.Value.Choices[0].Message.Content;
 
         _userInterface.WriteDebug($"response: {responseMessage}");
+        _userInterface.WriteDebug($"Tokens sent: {response.Value.Usage.PromptTokens}, Tokens received: {response.Value.Usage.CompletionTokens}, Total: {response.Value.Usage.TotalTokens}");
 
         if (saveHistory)
         {
@@ -306,7 +307,7 @@ public class Claire
         var intentPrompt =
             $"Determine if the following statement is asking about a specific command, generate a file, or an explanation:\n\n";
         intentPrompt += $"\"{prompt}\"\n\n";
-        intentPrompt += $"Reply only with the word `command`, `file`, `explain` or 'unknown.";
+        intentPrompt += $"Reply only with the word `command`, `file`, `explain` or 'unknown`.";
 
         var intentText = await ExecuteChatPrompt(intentPrompt);
 
@@ -329,7 +330,7 @@ public class Claire
                 break;
 
             default:
-                Console.Error.WriteLine($"Unknown intent type: {intentText}");
+                Console.Error.WriteLine($"Unknown GetIntentAsync response: {intentText}");
                 intent.Type = ChatResponseType.Unknown;
                 break;
         }
