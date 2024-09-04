@@ -17,11 +17,6 @@
     // This means that the total number of sent to Azure OpenAI will be <=(history) + 2
     "chatHistorySize": 10,
 
-    // Should Claire suggest completions (WIP)?
-    "suggestCompletions": false,
-    // Delay between each completion suggestion (in milliseconds)
-    "suggestionDelay": 500,
-
     // Enable debug output.
-    "debug": false
+    "debug": true
 }

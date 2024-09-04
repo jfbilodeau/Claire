@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Claire;
 
@@ -46,6 +47,12 @@ public class ClaireShell
         _processErrorReader.Dispose();
     }
 
+    [MemberNotNull(
+        nameof(_process), 
+        nameof(_processWriter), 
+        nameof(_processReader), 
+        nameof(_processErrorReader)
+    )]
     private void CreateShellProcess()
     {
         var arguments = string.Empty;

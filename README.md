@@ -21,6 +21,11 @@ Claire is a proof of concept as well as a demo of Azure OpenAI and prompt engine
 - Claire is written in .NET 8.0 runs on Linux, MacOS, and Windows
 - Claire can be containerized to run in a sandboxed environment
 
+### Semantic Kernel
+Since 2024-09-04, Claire has been ported to Semantic Kernel by Microsoft. This allowed me to cut the code of the main program file, `Claire.cs` by half (668 loc -> 332 loc) and make Claire even more intelligent and interactive.
+
+[Semantic Kernel](https://learn.microsoft.com/en-us/semantic-kernel/overview/)
+
 ### Limitations and Caveats
 
 - Claire is running on the user's computer. **Please read the command proposed by Claire carefully before executing it.** Claire is not sandboxed and can execute any command that the user can execute.
@@ -53,11 +58,9 @@ The following parameters are supported by Claire:
 |OpenAiModel|`string`|Yes|The name of the OpenAI model to use                                                                      |
 |ShellProcessName|`string`|No|The name of the shell to use. Default is `bash` on Linux and MacOS. `cmd` on Windows. PowerShell is also supported.|
 |ChatHistorySize|`int`|No|The number of chat history to keep and re-send to Azure OpenAI. This maintains a limited conversation state between the user and Azure OpenAI. Default is 10.|
-|SuggestCompletions|`boolean`|No|Should Claire provide suggestions to complete user prompt?|
-|SuggestionDelay|`int`|No|Number of milliseconds to wait after user typed a key before attempting to complete user prompt.|
 
 Parameters may be passed to Claires using the following methods:
-- Provide them in `<<project-root>>/Claire/Claire/Claire.csproj`
+- Provide them in `<project-root>/Claire/Claire/Claire.csproj`
 - Pass command line parameters. For example: `dotnet run --OpenAiUrl="https://..." --OpenAiKey="..." --OpenAiModel="..."`
 - Environment variables (Necessary for containerization)
 - (for developers) [.NET user secrets (https://learn.microsoft.com/en-us/aspnet/core/security/app-secrets)](https://learn.microsoft.com/en-us/aspnet/core/security/app-secrets)
@@ -74,9 +77,8 @@ I believe the command you are looking for is:
 `del /F /S /Q C:\*`
 
 Shall I executed it for you? Y/N: Y
-😱
-
 ```
+😱
 
 To run Claire in a sandbox, consider using a container. A `Dockerfile` is provided to containerize Claire.
 
@@ -87,7 +89,7 @@ To run Claire in a sandbox, consider using a container. A `Dockerfile` is provid
 ## Question/Comments
 For any problems, please open an issue on GitHub. I will try to answer as soon as possible.
 
-For any questions, please email me at [jfbilodeau@chronogears.com](mailto:jfbilodeau@chronogears.com)
+For any questions, please email me at [jbilodeau@microsoft.com](mailto:jfbilodeau@chronogears.com).
 
 ## License
 MIT (see `./LICENSE.txt`)
