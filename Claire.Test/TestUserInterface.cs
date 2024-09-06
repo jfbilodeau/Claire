@@ -29,6 +29,11 @@ class TestUserInterface : IUserInterface
         // Nothing to do...
     }
 
+    public void WriteWarning(string message)
+    {
+        // Nothing to do...
+    }
+
     public void WriteChatResponse(string message, bool newLine = true)
     {
         // Nothing to do...

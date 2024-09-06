@@ -96,7 +96,7 @@ public class ClaireShell
         }
         else
         {
-            throw new Exception($"Unknown shell name: {_shellProcessName}");
+            throw new ArgumentException($"Unknown shell name: {_shellProcessName}");
         }
     }
 
@@ -121,6 +121,10 @@ public class ClaireShell
         // Remove the delimiter from the end of the response
         response = response.Replace(endStreamToken, string.Empty);
 
+        // Get rid of the last line which is the command prompt
+        var lines = response.Split(_processWriter.NewLine);
+        response = string.Join(_processWriter.NewLine, lines[..^1]);
+        
         return response;
     }
 
