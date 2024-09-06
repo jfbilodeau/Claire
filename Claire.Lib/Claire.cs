@@ -1,8 +1,3 @@
-using System.ComponentModel;
-using Microsoft.SemanticKernel;
-using Microsoft.SemanticKernel.ChatCompletion;
-using Microsoft.SemanticKernel.Connectors.OpenAI;
-
 namespace Claire;
 
 public class Claire
@@ -14,68 +9,32 @@ public class Claire
         public readonly Action Execute = function;
     }
 
-    private readonly IUserInterface _userInterface;
-
     private readonly List<CommandDefinition> _commands = [];
 
-    private readonly ClaireConfiguration _configuration;
+    private readonly IUserInterface _userInterface;
 
-    // private readonly AzureOpenAIClient _openAiClient;
-    private readonly OpenAIPromptExecutionSettings _openAiPromptExecutionSettings;
-
-    private readonly Kernel _kernel;
-    
     private readonly ClaireShell _shell;
 
-    private readonly ChatHistory _chatHistory = new();
+    private readonly ClaireKernel _kernel;
 
     private bool _active;
-    private bool _suppressAssistantOutput;
-
-    public ClaireConfiguration Configuration => _configuration;
-    public IUserInterface UserInterface => _userInterface;
 
     public Claire(ClaireConfiguration configuration, IUserInterface userInterface)
     {
-        _configuration = configuration;
         _userInterface = userInterface;
 
-        _userInterface.DebugOutput = _configuration.Debug;
+        _userInterface.DebugOutput = configuration.Debug;
 
         // Initialize commands
         _commands.Add(new CommandDefinition("help", "Display a list of commands", CommandHelp));
         _commands.Add(new CommandDefinition("debug", "Enable/disable debug output", CommandDebug));
         _commands.Add(new CommandDefinition("exit", "Exit Claire", CommandExit));
 
-
-        // Create system prompt
-        var systemPrompt = $"You are Claire, a Command-Line AI Runtime Environment who guides users with the {_configuration.ShellProcessName} shell.\n";
-        systemPrompt += "You will provide command, scripts, configuration files and explanation to the user\n";
-        systemPrompt += "You will also provide help with using the Azure CLI, generate ARM and Bicep templates and help with Github actions.\n";
-        systemPrompt += "Execute the function 'execute_command' to execute a shell or CLI command. Prompt the user for missing parameters.\n";
-        systemPrompt += "Execute the function 'generate_script' when you need to generate code, script or a file for the user. Explain the script but do not repeat the script to the user.\n";
-        _chatHistory.AddSystemMessage(systemPrompt);
-        
-        // Create chat completion service options
-        _openAiPromptExecutionSettings = new()
-        {
-            ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions,
-        };
-
-        // Create kernel
-        var kernelBuilder = Kernel.CreateBuilder()
-            .AddAzureOpenAIChatCompletion(
-                _configuration.OpenAiModel,
-                _configuration.OpenAiUrl,
-                _configuration.OpenAiKey
-            );
-
-        kernelBuilder.Plugins.AddFromObject(this);
-
-        _kernel = kernelBuilder.Build();
+        // Create Claire kernel
+        _kernel = new ClaireKernel(configuration);
 
         // Create shell
-        _shell = new ClaireShell(_configuration.ShellProcessName);
+        _shell = new ClaireShell(configuration.ShellProcessName);
     }
 
     private string GetUserPrompt()
@@ -100,39 +59,35 @@ public class Claire
         }
     }
 
-    private async Task<string> ExecuteChatPrompt(string prompt)
+    private async Task ExecuteCommandPromptUser(string command)
     {
-        return await ExecuteChat(
-            prompt
-        );
-    }
+        _userInterface.WriteSystem($"I believe the command you are looking for is:");
+        _userInterface.WriteChatResponse($"{command}");
+        _userInterface.NextLine();
 
-    private async Task<string> ExecuteChat(string prompt)
-    {
-        _chatHistory.AddUserMessage(prompt);
+        var execute = _userInterface.PromptConfirm("Shall I executed it for you?");
 
-        _userInterface.WriteDebug($"prompt: {prompt}");
+        if (execute)
+        {
+            var result = await ExecuteCommand(command);
 
-        var chatCompletionService = _kernel.GetRequiredService<IChatCompletionService>();
+            _userInterface.WriteCommand(result.Output);
 
-        var response = await chatCompletionService.GetChatMessageContentsAsync(
-            _chatHistory,
-            _openAiPromptExecutionSettings,
-            _kernel
-        );
+            if (result.HasError)
+            {
+                _userInterface.WriteCommandError(result.Error);
 
-        var responseMessage = response[0].Content ?? string.Empty;
+                _userInterface.WriteSystem("It looks like the command encountered a problem. Investigating...");
 
-        _userInterface.WriteDebug($"response: {responseMessage}");
-        // _userInterface.WriteDebug($"Tokens sent: {response.Value.Usage.PromptTokens}, Tokens received: {response.Value.Usage.CompletionTokens}, Total: {response.Value.Usage.TotalTokens}");
+                var errorDescription = await GetErrorDescription(command, result.Error);
 
-        return responseMessage;
+                _userInterface.WriteChatResponse(errorDescription);
+            }
+        }
     }
 
     private async Task<ShellResult> ExecuteCommand(string command)
     {
-        _suppressAssistantOutput = true;
-
         try
         {
             _userInterface.WriteDebug($"command: {command}");
@@ -157,10 +112,44 @@ public class Claire
         var prompt = $"Explain why the command `{command}` encountered the following error:\n";
         prompt += $"{error}\n";
 
-        var response = await ExecuteChatPrompt(prompt);
+        // When requesting an explanation, do not execute tools
+        var result = await _kernel.ExecutePrompt(prompt, useTools: false);
 
-        return response;
+        return result.Message;
     }
+
+    public async Task GenerateFile(string fileName, string content)
+    {
+        _userInterface.WriteSystem($"I've generated the following:");
+        _userInterface.WriteChatResponse(content);
+
+        var saveFile = _userInterface.PromptConfirm($"Would you like to save the file '{fileName}'?");
+        if (saveFile)
+        {
+            if (string.IsNullOrEmpty(fileName))
+            {
+                fileName = _userInterface.Prompt("Please enter a filename: ");
+
+                if (string.IsNullOrEmpty(fileName))
+                {
+                    _userInterface.WriteSystem("No file name provide. File will not be saved.");
+                    return;
+                }
+            }
+
+            try
+            {
+                // TODO: Need to save through working directory of the command line...
+                await File.WriteAllTextAsync(fileName, content);
+                _userInterface.WriteSystem($"File {fileName} saved.");
+            }
+            catch (Exception exception)
+            {
+                _userInterface.WriteCommandError($"Could not save file {fileName}: {exception.Message}");
+            }
+        }
+    }
+
 
     public void Stop()
     {
@@ -191,13 +180,33 @@ public class Claire
         {
             _userInterface.WriteSystem("Let me think about that for a moment...");
 
-            _suppressAssistantOutput = false;
+            _userInterface.WriteDebug($"executing prompt: {prompt}");
 
-            var response = await ExecuteChat(prompt);
+            var result = await _kernel.ExecutePrompt(prompt, useTools: true);
 
-            if (!_suppressAssistantOutput)
+            _userInterface.WriteDebug($"response: {result}");
+            // _userInterface.WriteDebug($"Tokens sent: {response.Value.Usage.PromptTokens}, Tokens received: {response.Value.Usage.CompletionTokens}, Total: {response.Value.Usage.TotalTokens}");
+
+            switch (result.Action)
             {
-                _userInterface.WriteChatResponse(response);
+                case PromptResultAction.DisplayChatMessage:
+                    _userInterface.WriteChatResponse(result.Message);
+                    break;
+
+                case PromptResultAction.ExecuteCommand:
+                    await ExecuteCommandPromptUser(result.Command);
+                    break;
+
+                case PromptResultAction.GenerateFile:
+                    await GenerateFile(result.FileName, result.Content);
+                    break;
+                
+                case PromptResultAction.Quit:
+                    Stop();
+                    break;
+
+                default:
+                    throw new ArgumentOutOfRangeException();
             }
         }
     }
@@ -218,11 +227,11 @@ public class Claire
 
     private void CommandHelp()
     {
-        UserInterface.WriteSystem("Available commands:");
+        _userInterface.WriteSystem("Available commands:");
 
         foreach (var command in _commands)
         {
-            UserInterface.WriteSystem($"  /{command.Name} - {command.Description}");
+            _userInterface.WriteSystem($"  /{command.Name} - {command.Description}");
         }
     }
 
@@ -242,91 +251,6 @@ public class Claire
         {
             _userInterface.DebugOutput = true;
             _userInterface.WriteSystem("Debug output now is on");
-        }
-    }
-
-    [KernelFunction("execute_command")]
-    [Description("Execute a command for the shell configured for Claire. Can also be used to execute Azure CLI commands.")]
-    public async Task RunCommand(
-        string command
-    )
-    {
-        _userInterface.WriteSystem($"I believe the command you are looking for is:");
-        _userInterface.WriteChatResponse($"{command}");
-        _userInterface.NextLine();
-
-        var execute = _userInterface.PromptConfirm("Shall I executed it for you?");
-
-        if (execute)
-        {
-            var result = await ExecuteCommand(command);
-
-            _userInterface.WriteCommand(result.Output);
-
-            if (result.HasError)
-            {
-                _userInterface.WriteCommandError(result.Error);
-
-                _userInterface.WriteSystem("It looks like the command encountered a problem. Investigating...");
-
-                var errorDescription = await GetErrorDescription(command, result.Error);
-
-                _userInterface.WriteChatResponse(errorDescription);
-            }
-        }
-    }
-
-    [KernelFunction("generate_script")]
-    [Description("Generate a file, template or script based on the prompt.")]
-    private async Task GenerateFile(string fileName, string content)
-    {
-        _suppressAssistantOutput = false;
-
-        _userInterface.WriteSystem($"The following file was generated:");
-        _userInterface.WriteChatResponse(content);
-
-        var saveFile = _userInterface.PromptConfirm($"Would you like to save the file '{fileName}'?");
-
-        if (saveFile)
-        {
-            if (string.IsNullOrEmpty(fileName))
-            {
-                fileName = _userInterface.Prompt("Please enter a filename: ");
-
-                if (string.IsNullOrEmpty(fileName))
-                {
-                    _userInterface.WriteSystem("No file name provide. File will not be saved.");
-                    return;
-                }
-            }
-
-            try
-            {
-                // TODO: Need to save through working directory of the command line...
-                await File.WriteAllTextAsync(fileName, content);
-                _userInterface.WriteSystem($"File {fileName} saved.");
-            }
-            catch (Exception exception)
-            {
-                _userInterface.WriteCommandError($"Could not save file {fileName}: {exception.Message}");
-            }
-        }
-        else
-        {
-            // Do not display the explanation of the script
-            _suppressAssistantOutput = true;
-        }
-    }
-    
-    [KernelFunction("exit_claire")]
-    [Description("Exit Claire.")]
-    public void ExitClaire()
-    {
-        var response = _userInterface.PromptConfirm("Are you sure you want to exit Claire?");
-        
-        if (response)
-        {
-            Stop();
         }
     }
 }
