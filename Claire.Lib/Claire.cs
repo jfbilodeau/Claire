@@ -2,15 +2,6 @@ namespace Claire;
 
 public class Claire
 {
-    private class CommandDefinition(string name, string description, Action function)
-    {
-        public readonly string Name = name;
-        public readonly string Description = description;
-        public readonly Action Execute = function;
-    }
-
-    private readonly List<CommandDefinition> _commands = [];
-
     private readonly IUserInterface _userInterface;
 
     private readonly ClaireShell _shell;
@@ -24,11 +15,6 @@ public class Claire
         _userInterface = userInterface;
 
         _userInterface.DebugOutput = configuration.Debug;
-
-        // Initialize commands
-        _commands.Add(new CommandDefinition("help", "Display a list of commands", CommandHelp));
-        _commands.Add(new CommandDefinition("debug", "Enable/disable debug output", CommandDebug));
-        _commands.Add(new CommandDefinition("exit", "Exit Claire", CommandExit));
 
         // Create Claire kernel
         _kernel = new ClaireKernel(configuration);
@@ -160,59 +146,60 @@ public class Claire
     {
         var prompt = GetUserPrompt();
 
-        if (!string.IsNullOrEmpty(prompt) && prompt[0] == '/')
+        _userInterface.WriteSystem("Let me think about that for a moment...");
+
+        _userInterface.WriteDebug($"executing prompt: {prompt}");
+
+        var result = await _kernel.ExecutePrompt(prompt, useTools: true);
+
+        _userInterface.WriteDebug($"response: {result}");
+
+        await ProcessPromptResult(result);
+    }
+
+    private async Task ProcessPromptResult(PromptResult result)
+    {
+        switch (result.Action)
         {
-            var command = prompt[1..];
+            case PromptResultAction.DisplayChatMessage:
+                _userInterface.WriteChatResponse(result.Message);
+                break;
 
-            var commandDefinition = _commands.FirstOrDefault(c => c.Name == command);
+            case PromptResultAction.ExecuteCommand:
+                await ExecuteCommandPromptUser(result.Command);
+                break;
 
-            if (commandDefinition == null)
-            {
-                _userInterface.WriteSystem($"Unknown command: {command}");
-                _userInterface.WriteSystem($"Use `/help` to see a list of commands.");
-            }
-            else
-            {
-                commandDefinition.Execute();
-            }
-        }
-        else
-        {
-            _userInterface.WriteSystem("Let me think about that for a moment...");
+            case PromptResultAction.GenerateFile:
+                await GenerateFile(result.FileName, result.Content);
+                break;
 
-            _userInterface.WriteDebug($"executing prompt: {prompt}");
+            case PromptResultAction.EnableDebug:
+                _userInterface.DebugOutput = true;
+                _userInterface.WriteSystem("Debug output enabled.");
+                break;
 
-            var result = await _kernel.ExecutePrompt(prompt, useTools: true);
+            case PromptResultAction.DisableDebug:
+                _userInterface.DebugOutput = false;
+                _userInterface.WriteSystem("Debug output disabled.");
+                break;
 
-            _userInterface.WriteDebug($"response: {result}");
-            // _userInterface.WriteDebug($"Tokens sent: {response.Value.Usage.PromptTokens}, Tokens received: {response.Value.Usage.CompletionTokens}, Total: {response.Value.Usage.TotalTokens}");
+            case PromptResultAction.ToggleDebug:
+                _userInterface.DebugOutput = !_userInterface.DebugOutput;
+                _userInterface.WriteSystem($"Debug output toggled to: {_userInterface.DebugOutput}");
+                break;
 
-            switch (result.Action)
-            {
-                case PromptResultAction.DisplayChatMessage:
-                    _userInterface.WriteChatResponse(result.Message);
-                    break;
+            case PromptResultAction.Quit:
+                Stop();
+                break;
 
-                case PromptResultAction.ExecuteCommand:
-                    await ExecuteCommandPromptUser(result.Command);
-                    break;
-
-                case PromptResultAction.GenerateFile:
-                    await GenerateFile(result.FileName, result.Content);
-                    break;
-                
-                case PromptResultAction.Quit:
-                    Stop();
-                    break;
-
-                default:
-                    throw new ArgumentOutOfRangeException();
-            }
+            default:
+                throw new ArgumentOutOfRangeException();
         }
     }
 
     public async Task Run()
     {
+        _userInterface.WriteWarning("Claire is a proof of concept and uses AI. You are in control but it can make mistakes. Execute commands at your own risk.");
         _userInterface.WriteSystem("Welcome to Claire. Where would you like to go today?");
 
         _active = true;
@@ -223,34 +210,5 @@ public class Claire
         }
 
         _userInterface.Reset();
-    }
-
-    private void CommandHelp()
-    {
-        _userInterface.WriteSystem("Available commands:");
-
-        foreach (var command in _commands)
-        {
-            _userInterface.WriteSystem($"  /{command.Name} - {command.Description}");
-        }
-    }
-
-    private void CommandExit()
-    {
-        Stop();
-    }
-
-    private void CommandDebug()
-    {
-        if (_userInterface.DebugOutput)
-        {
-            _userInterface.DebugOutput = false;
-            _userInterface.WriteSystem("Debug output now is off");
-        }
-        else
-        {
-            _userInterface.DebugOutput = true;
-            _userInterface.WriteSystem("Debug output now is on");
-        }
     }
 }

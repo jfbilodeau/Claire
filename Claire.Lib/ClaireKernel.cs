@@ -11,6 +11,9 @@ public enum PromptResultAction
     DisplayChatMessage,
     ExecuteCommand,
     GenerateFile,
+    EnableDebug,
+    DisableDebug,
+    ToggleDebug,
     Quit,
 }
 
@@ -39,6 +42,21 @@ public class PromptResult
     public static PromptResult GenerateFile(string fileName, string content)
     {
         return new PromptResult(PromptResultAction.GenerateFile, content, fileName);
+    }
+    
+    public static PromptResult EnableDebug()
+    {
+        return new PromptResult(PromptResultAction.EnableDebug);
+    }
+    
+    public static PromptResult DisableDebug()
+    {
+        return new PromptResult(PromptResultAction.DisableDebug);
+    }
+    
+    public static PromptResult ToggleDebug()
+    {
+        return new PromptResult(PromptResultAction.ToggleDebug);
     }
 
     public static PromptResult Quit()
@@ -114,29 +132,30 @@ public class ClaireKernel
         var chatCompletionService = _kernel.GetRequiredService<IChatCompletionService>();
         
         // Create chat completion service options
-        var executionSettings = new OpenAIPromptExecutionSettings
+        var executionSettings = new OpenAIPromptExecutionSettings()
         {
-            ResultsPerPrompt = 1,
-            // ToolCallBehavior = useTools ? ToolCallBehavior.AutoInvokeKernelFunctions : ToolCallBehavior.EnableFunctions([], false)
+            ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions,
         };
 
-        IReadOnlyList<ChatMessageContent> response;
+        var kernel = _kernel;
         
-        if (useTools)
+        if (!useTools)
         {
-            executionSettings.ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions;
-            response = await chatCompletionService.GetChatMessageContentsAsync(
-                _chatHistory,
-                executionSettings,
-                _kernel
-            );
+            // Do not include the kernel to prevent Semantic Kernel from executing tools
+            kernel = null;
         }
-        else
+
+        var response = await chatCompletionService.GetChatMessageContentsAsync(
+            _chatHistory,
+            executionSettings,
+            kernel
+        );
+        
+        var responseContent = response[0].Content;
+        
+        if (!string.IsNullOrEmpty(responseContent))
         {
-            response = await chatCompletionService.GetChatMessageContentsAsync(
-                _chatHistory,
-                executionSettings
-            );
+            _chatHistory.AddAssistantMessage(responseContent);
         }
 
         _promptResult ??= PromptResult.DisplayChatMessage(response[0].Content ?? string.Empty);
@@ -157,6 +176,27 @@ public class ClaireKernel
     private void GenerateFile(string fileName, string content)
     {
         _promptResult = PromptResult.GenerateFile(fileName, content);
+    }
+    
+    [KernelFunction]
+    [Description("Enable debug mode")]
+    public void EnableDebug()
+    {
+        _promptResult = PromptResult.EnableDebug();
+    }
+    
+    [KernelFunction]
+    [Description("Disable debug mode")]
+    public void DisableDebug()
+    {
+        _promptResult = PromptResult.DisableDebug();
+    }
+    
+    [KernelFunction]
+    [Description("Toggle debug mode on or off")]
+    public void ToggleDebug()
+    {
+        _promptResult = PromptResult.ToggleDebug();
     }
 
     [KernelFunction]

@@ -6,17 +6,17 @@ namespace Claire;
 // Wrapper for a shell process
 public class ClaireShell
 {
-    private readonly string ClaireShellPrompt = "ClaireShellPromptMarker";
+    private const string ClaireShellPrompt = "ClaireShellPromptMarker";
 
     private readonly string _shellProcessName;
     private readonly string _commandPrefix = string.Empty;
-    private string _commandSuffix = string.Empty;
+    private readonly string _commandSuffix = string.Empty;
     private Process _process;
     private StreamWriter _processWriter;
     private StreamReader _processReader;
     private StreamReader _processErrorReader;
 
-    private bool executingCommand = false;
+    private bool _executingCommand = false;
 
     public ClaireShell(string shellProcessName)
     {
@@ -128,11 +128,11 @@ public class ClaireShell
     {
         var response = string.Empty;
         var buffer = new char[4096];
-        int byteRead;
 
         var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
         try
         {
+            int byteRead;
             while ((byteRead = await reader.ReadAsync(buffer, cancellationTokenSource.Token)) > 0)
             {
                 response += new string(buffer, 0, byteRead);
@@ -148,12 +148,12 @@ public class ClaireShell
 
     public async Task<ShellResult> Execute(string command)
     {
-        if (executingCommand)
+        if (_executingCommand)
         {
             throw new Exception("Cannot execute command while another command is executing");
         }
 
-        executingCommand = true;
+        _executingCommand = true;
 
         // Write command to shell
         await _processWriter.WriteAsync($"{_commandPrefix}{command}{_commandSuffix}{_processWriter.NewLine}");
@@ -164,7 +164,7 @@ public class ClaireShell
             Error = await ReadUntilEnd(_processErrorReader),
         };
 
-        executingCommand = false;
+        _executingCommand = false;
 
         return result;
     }

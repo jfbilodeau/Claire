@@ -101,4 +101,9 @@ public class ConsoleUserInterface : IUserInterface
     {
         File.WriteAllText(fileName, contents);
     }
+
+    public void WriteWarning(string message)
+    {
+        Write(message, ConsoleColor.Yellow, ConsoleColor.Black);
+    }
 }

@@ -31,4 +31,5 @@ public interface IUserInterface
     void WriteCommandError(string message, bool newLine = true);
 
     void SaveFile(string fileName, string contents);
+    void WriteWarning(string message);
 }
