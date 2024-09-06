@@ -14,7 +14,7 @@ Claire is a proof of concept as well as a demo of Azure OpenAI and prompt engine
 - Claire is able to suggest commands based on natural-language user request
 - Claire is able to execute commands and provide the results to the user
 - Claire supports the Windows command line (`cmd` -- aka DOS Prompt), PowerShell, and Bash
-- Claire attemps to automatically explain errors when a command issues errors via `stderr`)
+- Claire attempts to automatically explain errors when a command issues errors via `stderr`)
 - Users are able to request explanation of commands and errors
 - Claire can generate configuration files (ie: Bicep) and scripts (`.bat`, `.ps1`, etc). Claire can also save them to the user's computer
 - Claire is able to assist with the [AZ CLI (https://learn.microsoft.com/en-us/cli/azure/)](https://learn.microsoft.com/en-us/cli/azure/)
@@ -30,7 +30,7 @@ Since 2024-09-04, Claire has been ported to Semantic Kernel by Microsoft. This a
 
 - Claire is running on the user's computer. **Please read the command proposed by Claire carefully before executing it.** Claire is not sandboxed and can execute any command that the user can execute.
 - Claire is not able to execute commands that require user input. For example, `sudo` commands that require the user to enter a password will not work and will cause Claire to hang while it's waiting for the command to complete.
-- Claire is able to generate and save files--but files will be save in the working directory of the application--not the current directory of the shell. For example, if you start Claire in `/home/user`, then ask Claire to `cd ./Documents` and you ask Claire to generate a file, the file will be saved in `/home/user`. Not `/home/user/Document`. This is a limitation of the current implementation.
+- Claire is able to generate and save files--but files will be saved in the working directory of the application--not the current directory of the shell. For example, if you start Claire in `/home/user`, then ask Claire to `cd ./Documents` and ask Claire to generate a file, the file will be saved in `/home/user`. Not `/home/user/Document`. This is a limitation of the current implementation.
 - Claire is an AI so it's bound to make mistakes. Of course, all mistakes are caused by the AI and certainly not by the author of the application. 😉
 
 ### How to use Claire
@@ -38,7 +38,7 @@ Since 2024-09-04, Claire has been ported to Semantic Kernel by Microsoft. This a
 #### Prerequisites
 As of now, there is no binary distribution of Claire. Source only. You will need the [.NET 8.0 SDK (dotnet.microsoft.com/download/dotnet/8.0)](https://dotnet.microsoft.com/download/dotnet/8.0). 
 
-You will also need an Azure account with OpenAI enabled. You can sign up for a free account [free account (azure.microsoft.com/free/)](https://azure.microsoft.com/free/).
+You will also need an Azure account with OpenAI enabled. You can sign up for a [free account (azure.microsoft.com/free/)](https://azure.microsoft.com/free/).
 
 #### Quick start
 
@@ -51,13 +51,13 @@ In a terminal
 
 The following parameters are supported by Claire:
 
-| Parameter | Type | Required | Description  |
-|-|-|-|-|
-|OpenAiUrl|`string`|Yes|The URL of the OpenAI API                                                                                |
-|OpenAiKey|`string`|Yes|The key of the OpenAI API                                                                                |
-|OpenAiModel|`string`|Yes|The name of the OpenAI model to use                                                                      |
-|ShellProcessName|`string`|No|The name of the shell to use. Default is `bash` on Linux and MacOS. `cmd` on Windows. PowerShell is also supported.|
-|ChatHistorySize|`int`|No|The number of chat history to keep and re-send to Azure OpenAI. This maintains a limited conversation state between the user and Azure OpenAI. Default is 10.|
+| Parameter        | Type     | Required | Description                                                                                                         |
+|------------------|----------|----------|---------------------------------------------------------------------------------------------------------------------|
+| OpenAiUrl        | `string` | Yes      | The URL of the OpenAI API                                                                                           |
+| OpenAiKey        | `string` | Yes      | The key of the OpenAI API                                                                                           |
+| OpenAiModel      | `string` | Yes      | The name of the OpenAI model to use                                                                                 |
+| ShellProcessName | `string` | No       | The name of the shell to use. Default is `bash` on Linux and MacOS. `cmd` on Windows. PowerShell is also supported. |
+| Debug            | `bool`   | No       | Enable debug output                                                                                                 |
 
 Parameters may be passed to Claires using the following methods:
 - Provide them in `<project-root>/Claire/Claire/Claire.csproj`
@@ -92,4 +92,5 @@ For any problems, please open an issue on GitHub. I will try to answer as soon a
 For any questions, please email me at [jbilodeau@microsoft.com](mailto:jfbilodeau@chronogears.com).
 
 ## License
-MIT (see `./LICENSE.txt`)
+MIT (see [./LICENSE.txt](./LICENSE.txt))
+```
