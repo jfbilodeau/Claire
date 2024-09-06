@@ -4,7 +4,7 @@ Welcome to Claire, the **C**ommand-**L**ine **A**rtificial **I**ntelligence **R*
 
 ### What is Claire?
 
-In her own words:
+In its own words:
 ```
 > Who are you?
 I am Claire, a virtual assistant designed to guide users in using the Bash shell and the Azure CLI. I will assist you in writing shell scripts, creating and managing configuration files, explaining command-line features, and using the Azure platform for infrastructure and application management.
@@ -18,7 +18,7 @@ Claire is a proof of concept as well as a demo of Azure OpenAI and prompt engine
 - Users are able to request explanation of commands and errors
 - Claire can generate configuration files (ie: Bicep) and scripts (`.bat`, `.ps1`, etc). Claire can also save them to the user's computer
 - Claire is able to assist with the [AZ CLI (https://learn.microsoft.com/en-us/cli/azure/)](https://learn.microsoft.com/en-us/cli/azure/)
-- Claire is written in .NET 8.0 runs on Linux, macOS, and Windows
+- Claire is written in .NET 8.0 and runs on Linux, macOS, and Windows
 - Claire can be containerized to run in a sandboxed environment
 
 ### Semantic Kernel
