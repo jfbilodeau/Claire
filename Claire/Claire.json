@@ -18,5 +18,5 @@
     "chatHistorySize": 10,
 
     // Enable debug output.
-    "debug": true
+    "debug": false
 }

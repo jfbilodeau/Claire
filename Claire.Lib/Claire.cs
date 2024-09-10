@@ -3,11 +3,8 @@ namespace Claire;
 public class Claire
 {
     private readonly IUserInterface _userInterface;
-
     private readonly ClaireShell _shell;
-
     private readonly ClaireKernel _kernel;
-
     private bool _active;
 
     public Claire(ClaireConfiguration configuration, IUserInterface userInterface)
@@ -36,7 +33,7 @@ public class Claire
 
             if (string.IsNullOrWhiteSpace(prompt))
             {
-                _userInterface.WriteSystem("Use `/help` to see a list of commands.");
+                _userInterface.WriteSystem("Sorry, I didn't hear what you said. Feel free to ask for help at any time.");
             }
             else
             {
