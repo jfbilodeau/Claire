@@ -24,12 +24,11 @@ public interface IUserInterface
 
     void WriteCommand(string message, bool newLine = true);
 
-    void WriteCompletion(string message, bool newLine = true);
-
     void WriteCommandOutput(string message, bool newLine = true);
 
     void WriteCommandError(string message, bool newLine = true);
 
     void SaveFile(string fileName, string contents);
+    
     void WriteWarning(string message);
 }

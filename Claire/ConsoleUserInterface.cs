@@ -16,7 +16,8 @@ public class ConsoleUserInterface : IUserInterface
     public string Prompt(string message)
     {
         WriteSystem(message);
-
+        
+        Write("> ", ConsoleColor.Cyan, _defaultBackgroundColor, false);
         var result = Console.ReadLine() ?? string.Empty;
 
         return result;
@@ -79,17 +80,12 @@ public class ConsoleUserInterface : IUserInterface
 
     public void WriteCommand(string message, bool newLine = true)
     {
-        Write(message, ConsoleColor.Green, ConsoleColor.Black, newLine);
-    }
-
-    public void WriteCompletion(string message, bool newLine = true)
-    {
-        Write(message, ConsoleColor.Cyan, ConsoleColor.Black, newLine);
+        Write(message, ConsoleColor.DarkYellow, ConsoleColor.Black, newLine);
     }
 
     public void WriteCommandOutput(string message, bool newLine = true)
     {
-        Write(message, ConsoleColor.Yellow, ConsoleColor.Black, newLine);
+        Write(message, ConsoleColor.Green, ConsoleColor.Black, newLine);
     }
 
     public void WriteCommandError(string message, bool newLine = true)

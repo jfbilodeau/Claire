@@ -1,0 +1,8 @@
+dir
+del hello.txt
+del notexists.txt
+az group list --query "[?starts_with(name, 'Demo')]" --output table
+az group create --name DemoClaire --location eastus
+az group create --name DemoClaire --location canadacentral
+az group list --query "[?starts_with(name, 'Demo')]" --output table
+az deployment group create --resource-group DemoClaire --template-file ClaireDemo.bicep
